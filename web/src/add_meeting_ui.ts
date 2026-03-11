@@ -268,3 +268,14 @@ export function setup_add_meeting_dropdown_widget_if_needed(): void {
         setup_add_meeting_dropdown_widget(".add-meeting-composebox-widget");
     }
 }
+
+// for unit tests
+export const __test_only = {
+    set_invite_users_widget: (w: any) => { invite_users_widget = w; },
+    on_add_all_users_click,
+    populate_user_dropdown,
+    item_click_callback,
+    reset_composebox_widget_flag: () => { composebox_add_meeting_dropdown_widget = false; },
+    // seam for testing — lets tests intercept append_user calls
+    append_user: (user: people.User, widget: any) => user_pill.append_user(user, widget),
+};
