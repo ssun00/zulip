@@ -20,6 +20,7 @@ import * as timerender from "./timerender.ts";
 import * as user_pill from "./user_pill.ts";
 import * as flatpickr from "./flatpickr.ts";
 import * as util from "./util.ts";
+import {open_availability_modal} from "./meeting_availability_submission_ui.ts";
 
 let add_meeting_widget: dropdown_widget.DropdownWidget | undefined;
 let add_meeting_dropdown: tippy.Instance | undefined;
@@ -425,6 +426,14 @@ function item_click_callback(
     });
   } else if (current_value === add_meeting.OPTION_PROPOSE_MEETING) {
     // TODO: implement "Propose a meeting" flow
+    void import("./meeting_availability_submission_ui.ts").then(
+      ({open_availability_modal}) => {
+        open_availability_modal(1, (response) => {
+          // use real meeting ID
+          console.log("Submitted responses:", responses);
+        });
+      },
+    );
   }
 }
 
@@ -489,8 +498,12 @@ function update_channel_warning(): void {
 }
 
 export const __test_only = {
-    set_invite_users_widget: (w: any) => { invite_users_widget = w; },
-    on_add_all_users_click,
-    reset_composebox_widget_flag: () => { composebox_add_meeting_dropdown_widget = false; },
-    get_composebox_widget_flag: () => composebox_add_meeting_dropdown_widget,
+  set_invite_users_widget: (w: any) => {
+    invite_users_widget = w;
+  },
+  on_add_all_users_click,
+  reset_composebox_widget_flag: () => {
+    composebox_add_meeting_dropdown_widget = false;
+  },
+  get_composebox_widget_flag: () => composebox_add_meeting_dropdown_widget,
 };
