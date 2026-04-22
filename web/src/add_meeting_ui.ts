@@ -9,7 +9,7 @@ import * as add_meeting from "./add_meeting.ts";
 import * as channel from "./channel.ts";
 import * as dialog_widget from "./dialog_widget.ts";
 import * as dropdown_widget from "./dropdown_widget.ts";
-import { $t, $t_html } from "./i18n.ts";
+import {$t, $t_html} from "./i18n.ts";
 import * as modals from "./modals.ts";
 import * as hash_util from "./hash_util.ts";
 import * as browser_history from "./browser_history.ts";
@@ -73,7 +73,7 @@ function submit_rsvp_meeting_form(): void {
     void channel.post({
       url: "/json/users/me/subscriptions",
       data: {
-        subscriptions: JSON.stringify([{ name: topic }]),
+        subscriptions: JSON.stringify([{name: topic}]),
         principals: JSON.stringify([
           people.my_current_user_id(),
           ...invitee_ids,
@@ -84,10 +84,10 @@ function submit_rsvp_meeting_form(): void {
         // Find the new stream id by looking it up by name
         void channel.get({
           url: "/json/streams",
-          data: { include_subscribed: true },
+          data: {include_subscribed: true},
           success(streams_data) {
             const streams = (
-              streams_data as { streams: { stream_id: number; name: string }[] }
+              streams_data as {streams: {stream_id: number; name: string}[]}
             ).streams;
             const new_stream = streams.find((s) => s.name === topic);
             if (new_stream) {
@@ -104,8 +104,12 @@ function submit_rsvp_meeting_form(): void {
 
 function submit_propose_meeting_form(): void {
   const topic = $<HTMLInputElement>("#propose-meeting-topic").val()?.trim();
-  const dates_raw = $<HTMLInputElement>("#propose-meeting-dates-value").val()?.trim();
-  const times_raw = $<HTMLInputElement>("#propose-meeting-times-value").val()?.trim();
+  const dates_raw = $<HTMLInputElement>("#propose-meeting-dates-value")
+    .val()
+    ?.trim();
+  const times_raw = $<HTMLInputElement>("#propose-meeting-times-value")
+    .val()
+    ?.trim();
   const rsvp_by = $<HTMLInputElement>("#propose-rsvp-by-value").val()?.trim();
   assert(topic && dates_raw && times_raw && rsvp_by);
 
@@ -113,14 +117,22 @@ function submit_propose_meeting_form(): void {
   const stream_id = narrow_state.stream_id();
   assert(stream_id !== undefined);
 
-  const create_new_channel = $<HTMLInputElement>("#propose-create-channel").prop("checked") as boolean;
+  const create_new_channel = $<HTMLInputElement>(
+    "#propose-create-channel",
+  ).prop("checked") as boolean;
 
-  const dates = dates_raw.split(",").map((s) => s.trim()).filter(Boolean);
-  const times = times_raw.split(",").map((s) => s.trim()).filter(Boolean);
-  const slots: { start_time: string }[] = [];
+  const dates = dates_raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const times = times_raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const slots: {start_time: string}[] = [];
   for (const date of dates) {
     for (const time of times) {
-      slots.push({ start_time: `${date}T${time}:00` });
+      slots.push({start_time: `${date}T${time}:00`});
     }
   }
 
@@ -166,7 +178,7 @@ function submit_propose_meeting_form(): void {
       stream_id: create_new_channel ? undefined : stream_id,
     },
     success(data) {
-      const result = data as { meeting_id: number; stream_id: number };
+      const result = data as {meeting_id: number; stream_id: number};
       send_message(result.stream_id, result.meeting_id);
     },
   });
@@ -181,20 +193,28 @@ function update_rsvp_submit_button_state(): void {
   const stream_id = narrow_state.stream_id();
 
   const $submit_button = $("#add-rsvp-meeting-modal .dialog_submit_button");
-  const is_disabled = !topic || !datetime || !has_invitees || stream_id === undefined;
+  const is_disabled =
+    !topic || !datetime || !has_invitees || stream_id === undefined;
 
   $submit_button.prop("disabled", is_disabled);
 }
 
 function update_propose_submit_button_state(): void {
   const topic = $<HTMLInputElement>("#propose-meeting-topic").val()?.trim();
-  const dates = $<HTMLInputElement>("#propose-meeting-dates-value").val()?.trim();
-  const times = $<HTMLInputElement>("#propose-meeting-times-value").val()?.trim();
+  const dates = $<HTMLInputElement>("#propose-meeting-dates-value")
+    .val()
+    ?.trim();
+  const times = $<HTMLInputElement>("#propose-meeting-times-value")
+    .val()
+    ?.trim();
   const rsvp_by = $<HTMLInputElement>("#propose-rsvp-by-value").val()?.trim();
   const has_invitees = user_pill.get_user_ids(invite_users_widget).length > 0;
 
   const $submit_button = $("#add-propose-meeting-modal .dialog_submit_button");
-  $submit_button.prop("disabled", !topic || !dates || !times || !rsvp_by || !has_invitees);
+  $submit_button.prop(
+    "disabled",
+    !topic || !dates || !times || !rsvp_by || !has_invitees,
+  );
 }
 
 function populate_rsvp_user_dropdown(): void {
@@ -248,12 +268,16 @@ function populate_propose_user_dropdown(): void {
   const $dropdown = $("#propose-user-dropdown");
   $dropdown.empty();
 
-  const already_added_ids = new Set(user_pill.get_user_ids(invite_users_widget));
-  const users = people.get_realm_users().filter((u) => !already_added_ids.has(u.user_id) && !u.is_bot);
+  const already_added_ids = new Set(
+    user_pill.get_user_ids(invite_users_widget),
+  );
+  const users = people
+    .get_realm_users()
+    .filter((u) => !already_added_ids.has(u.user_id) && !u.is_bot);
 
   if (users.length === 0) {
     $dropdown.append(
-      `<div class="rsvp-user-option disabled">${$t({ defaultMessage: "No users available" })}</div>`,
+      `<div class="rsvp-user-option disabled">${$t({defaultMessage: "No users available"})}</div>`,
     );
     return;
   }
@@ -268,7 +292,9 @@ function populate_propose_user_dropdown(): void {
                 </div>
             </div>`;
 
-    const $option = $(`<div class="rsvp-user-option horizontal-user">${html}</div>`);
+    const $option = $(
+      `<div class="rsvp-user-option horizontal-user">${html}</div>`,
+    );
 
     $option.on("click", () => {
       user_pill.append_user(user, invite_users_widget);
@@ -303,7 +329,7 @@ function rsvp_meeting_modal_post_render(): void {
     if (user_pill.get_user_ids(invite_users_widget).length === 0) {
       $("#rsvp-invite-users").attr(
         "data-placeholder",
-        $t({ defaultMessage: "Add users" }),
+        $t({defaultMessage: "Add users"}),
       );
     }
     update_rsvp_channel_warning();
@@ -424,6 +450,9 @@ function rsvp_meeting_modal_post_render(): void {
       return new Date();
     })();
 
+    if ($input.length === 0) {
+      return;
+    }
     flatpickr.show_flatpickr(
       util.the($input),
       (selectedDate) => {
@@ -513,8 +542,14 @@ function propose_meeting_modal_post_render(): void {
 
     // check if any date + time combo is in the past
     if (dates_raw && times_raw) {
-      const dates = dates_raw.split(",").map((s) => s.trim()).filter(Boolean);
-      const times = times_raw.split(",").map((s) => s.trim()).filter(Boolean);
+      const dates = dates_raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const times = times_raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
       for (const date of dates) {
         for (const time of times) {
           const dt = new Date(`${date}T${time}:00`);
@@ -551,22 +586,38 @@ function propose_meeting_modal_post_render(): void {
       $rsvp_error.hide();
     }
 
-    const topic = ($<HTMLInputElement>("#propose-meeting-topic").val() ?? "").trim();
+    const topic = (
+      $<HTMLInputElement>("#propose-meeting-topic").val() ?? ""
+    ).trim();
     const has_invitees = user_pill.get_user_ids(invite_users_widget).length > 0;
-    const $submit_button = $("#add-propose-meeting-modal .dialog_submit_button");
+    const $submit_button = $(
+      "#add-propose-meeting-modal .dialog_submit_button",
+    );
     $submit_button.prop(
       "disabled",
-      !topic || !dates_raw || !times_raw || !rsvp_by || !has_invitees || dates_times_error || rsvp_error,
+      !topic ||
+        !dates_raw ||
+        !times_raw ||
+        !rsvp_by ||
+        !has_invitees ||
+        dates_times_error ||
+        rsvp_error,
     );
   }
 
   $(document).off("click.propose-pickers");
   $(".propose-time-picker").remove();
 
-  $("#add-propose-meeting-modal").on("input", "input,textarea", validate_propose_form);
+  $("#add-propose-meeting-modal").on(
+    "input",
+    "input,textarea",
+    validate_propose_form,
+  );
   $("#propose-add-all-users").on("click", on_add_all_users_click);
 
-  invite_users_widget = user_pill.create_pills($("#propose-invite-users-container"));
+  invite_users_widget = user_pill.create_pills(
+    $("#propose-invite-users-container"),
+  );
 
   invite_users_widget.onPillCreate(() => {
     $("#propose-invite-users").removeAttr("data-placeholder");
@@ -576,7 +627,10 @@ function propose_meeting_modal_post_render(): void {
 
   invite_users_widget.onPillRemove(() => {
     if (user_pill.get_user_ids(invite_users_widget).length === 0) {
-      $("#propose-invite-users").attr("data-placeholder", $t({ defaultMessage: "Add users" }));
+      $("#propose-invite-users").attr(
+        "data-placeholder",
+        $t({defaultMessage: "Add users"}),
+      );
     }
     update_propose_channel_warning();
     update_propose_submit_button_state();
@@ -596,7 +650,9 @@ function propose_meeting_modal_post_render(): void {
   });
 
   $("#propose-invite-users").on("input", () => {
-    const query = ($("#propose-invite-users").text() ?? "").toLowerCase().trim();
+    const query = ($("#propose-invite-users").text() ?? "")
+      .toLowerCase()
+      .trim();
     const $dropdown = $("#propose-user-dropdown");
 
     if (!query) {
@@ -643,12 +699,16 @@ function propose_meeting_modal_post_render(): void {
     populate_propose_user_dropdown();
 
     const containerEl = $("#propose-invite-users-container")[0];
-    if (!containerEl) { return; }
+    if (!containerEl) {
+      return;
+    }
 
     const rect = containerEl.getBoundingClientRect();
     const dropdownEl = $dropdown[0];
 
-    if (!dropdownEl) { return; }
+    if (!dropdownEl) {
+      return;
+    }
 
     $dropdown.show();
     const dropdownHeight = dropdownEl.offsetHeight;
@@ -677,14 +737,18 @@ function propose_meeting_modal_post_render(): void {
           return `${y}-${mo}-${dy}`;
         });
 
-        $("#propose-meeting-dates-value").val(isoList.join(",")).trigger("input");
+        $("#propose-meeting-dates-value")
+          .val(isoList.join(","))
+          .trigger("input");
 
-        const formatted = captured_dates.map((d) => {
-          const dayOfWeek = d.toLocaleDateString("en-US", { weekday: "short" });
-          const month = d.toLocaleDateString("en-US", { month: "long" });
-          const day = d.getDate();
-          return `${dayOfWeek}, ${month} ${day}${ordinal(day)}`;
-        }).join("; ");
+        const formatted = captured_dates
+          .map((d) => {
+            const dayOfWeek = d.toLocaleDateString("en-US", {weekday: "short"});
+            const month = d.toLocaleDateString("en-US", {month: "long"});
+            const day = d.getDate();
+            return `${dayOfWeek}, ${month} ${day}${ordinal(day)}`;
+          })
+          .join("; ");
 
         $input.val(formatted);
         validate_propose_form();
@@ -706,133 +770,148 @@ function propose_meeting_modal_post_render(): void {
   // times picker — bind directly on the element, not delegated
   const timesInputEl = document.getElementById("propose-meeting-times");
   if (timesInputEl) {
-    timesInputEl.addEventListener("click", (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    timesInputEl.addEventListener(
+      "click",
+      (e) => {
+        e.preventDefault();
+        e.stopPropagation();
 
-      try {
-        $(".propose-time-picker").remove();
+        try {
+          $(".propose-time-picker").remove();
 
-        const $input = $("#propose-meeting-times");
-        const existing = (($("#propose-meeting-times-value").val() ?? "") as string)
-          .split(",").map((s) => s.trim()).filter(Boolean);
-        const selected = new Set(existing);
+          const $input = $("#propose-meeting-times");
+          const existing = (
+            ($("#propose-meeting-times-value").val() ?? "") as string
+          )
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+          const selected = new Set(existing);
 
-        const slots: string[] = [];
-        for (let h = 0; h < 24; h++) {
-          for (const m of [0, 15, 30, 45]) {
-            slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+          const slots: string[] = [];
+          for (let h = 0; h < 24; h++) {
+            for (const m of [0, 15, 30, 45]) {
+              slots.push(
+                `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`,
+              );
+            }
           }
-        }
 
-        function format_display(iso: string): string {
-          const [hStr, mStr] = iso.split(":");
-          const h = Number(hStr);
-          const ampm = h < 12 ? "AM" : "PM";
-          const h12 = h % 12 === 0 ? 12 : h % 12;
-          return `${h12}:${String(Number(mStr)).padStart(2, "0")} ${ampm}`;
-        }
+          function format_display(iso: string): string {
+            const [hStr, mStr] = iso.split(":");
+            const h = Number(hStr);
+            const ampm = h < 12 ? "AM" : "PM";
+            const h12 = h % 12 === 0 ? 12 : h % 12;
+            return `${h12}:${String(Number(mStr)).padStart(2, "0")} ${ampm}`;
+          }
 
-        function commit(): void {
-          const sorted = [...selected].sort();
-          $("#propose-meeting-times-value").val(sorted.join(",")).trigger("input");
-          $input.val(sorted.map(format_display).join(", "));
-          validate_propose_form();
-        }
+          function commit(): void {
+            const sorted = [...selected].sort();
+            $("#propose-meeting-times-value")
+              .val(sorted.join(","))
+              .trigger("input");
+            $input.val(sorted.map(format_display).join(", "));
+            validate_propose_form();
+          }
 
-        const pickerEl = document.createElement("div");
-        pickerEl.className = "propose-time-picker";
-        Object.assign(pickerEl.style, {
-          position: "fixed",
-          zIndex: "99999",
-          background: "var(--color-background-modal, #fff)",
-          border: "1px solid var(--color-border, #ddd)",
-          boxShadow: "0 3px 13px rgba(0,0,0,0.08)",
-          borderRadius: "5px",
-          padding: "8px",
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "2px",
-          maxHeight: "260px",
-          overflowY: "auto",
-          width: "260px",
-          pointerEvents: "all",
-        });
-
-        for (const slot of slots) {
-          const cell = document.createElement("div");
-          cell.className = "propose-time-cell" + (selected.has(slot) ? " selected" : "");
-          cell.textContent = format_display(slot);
-          Object.assign(cell.style, {
-            fontSize: "12px",
-            padding: "5px 3px",
-            textAlign: "center",
-            cursor: "pointer",
-            borderRadius: "4px",
-            lineHeight: "1.3",
-            color: "var(--color-text-default)",
-            transition: "background 0.1s",
+          const pickerEl = document.createElement("div");
+          pickerEl.className = "propose-time-picker";
+          Object.assign(pickerEl.style, {
+            position: "fixed",
+            zIndex: "99999",
+            background: "var(--color-background-modal, #fff)",
+            border: "1px solid var(--color-border, #ddd)",
+            boxShadow: "0 3px 13px rgba(0,0,0,0.08)",
+            borderRadius: "5px",
+            padding: "8px",
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: "2px",
+            maxHeight: "260px",
+            overflowY: "auto",
+            width: "260px",
+            pointerEvents: "all",
           });
-          cell.addEventListener("mouseenter", () => {
-            if (!selected.has(slot)) {
-              cell.style.background = "var(--color-background-hover, rgba(255,255,255,0.08))";
-            }
-          });
-          cell.addEventListener("mouseleave", () => {
-            if (!selected.has(slot)) {
-              cell.style.background = "";
-            }
-          });
-          cell.addEventListener("click", (ev) => {
-            ev.stopPropagation();
+
+          for (const slot of slots) {
+            const cell = document.createElement("div");
+            cell.className =
+              "propose-time-cell" + (selected.has(slot) ? " selected" : "");
+            cell.textContent = format_display(slot);
+            Object.assign(cell.style, {
+              fontSize: "12px",
+              padding: "5px 3px",
+              textAlign: "center",
+              cursor: "pointer",
+              borderRadius: "4px",
+              lineHeight: "1.3",
+              color: "var(--color-text-default)",
+              transition: "background 0.1s",
+            });
+            cell.addEventListener("mouseenter", () => {
+              if (!selected.has(slot)) {
+                cell.style.background =
+                  "var(--color-background-hover, rgba(255,255,255,0.08))";
+              }
+            });
+            cell.addEventListener("mouseleave", () => {
+              if (!selected.has(slot)) {
+                cell.style.background = "";
+              }
+            });
+            cell.addEventListener("click", (ev) => {
+              ev.stopPropagation();
+              if (selected.has(slot)) {
+                selected.delete(slot);
+                cell.classList.remove("selected");
+                cell.style.background = "";
+                cell.style.color = "var(--color-text-default)";
+                cell.style.fontWeight = "";
+              } else {
+                selected.add(slot);
+                cell.classList.add("selected");
+                cell.style.background =
+                  "var(--color-compose-send-button-background, #6c6cdc)";
+                cell.style.color = "#fff";
+                cell.style.fontWeight = "500";
+              }
+              commit();
+            });
+
             if (selected.has(slot)) {
-              selected.delete(slot);
-              cell.classList.remove("selected");
-              cell.style.background = "";
-              cell.style.color = "var(--color-text-default)";
-              cell.style.fontWeight = "";
-            } else {
-              selected.add(slot);
-              cell.classList.add("selected");
-              cell.style.background = "var(--color-compose-send-button-background, #6c6cdc)";
+              cell.style.background =
+                "var(--color-compose-send-button-background, #6c6cdc)";
               cell.style.color = "#fff";
               cell.style.fontWeight = "500";
             }
-            commit();
-          });
-
-          if (selected.has(slot)) {
-            cell.style.background = "var(--color-compose-send-button-background, #6c6cdc)";
-            cell.style.color = "#fff";
-            cell.style.fontWeight = "500";
+            pickerEl.appendChild(cell);
           }
-          pickerEl.appendChild(cell);
+
+          const rect = timesInputEl.getBoundingClientRect();
+          pickerEl.style.top = `${rect.bottom + 4}px`;
+          pickerEl.style.left = `${rect.left}px`;
+          document.body.appendChild(pickerEl);
+
+          setTimeout(() => {
+            const cells = pickerEl.querySelectorAll(".propose-time-cell");
+            const eightAm = cells[32];
+            if (eightAm) {
+              pickerEl.scrollTop = (eightAm as HTMLElement).offsetTop - 10;
+            }
+
+            document.addEventListener("click", function dismiss() {
+              pickerEl.remove();
+              document.removeEventListener("click", dismiss);
+            });
+          }, 0);
+
+          pickerEl.addEventListener("click", (ev) => ev.stopPropagation());
+        } catch (err) {
+          console.error("Time picker error:", err);
         }
-
-        const rect = timesInputEl.getBoundingClientRect();
-        pickerEl.style.top = `${rect.bottom + 4}px`;
-        pickerEl.style.left = `${rect.left}px`;
-        document.body.appendChild(pickerEl);
-
-        setTimeout(() => {
-          const cells = pickerEl.querySelectorAll(".propose-time-cell");
-          const eightAm = cells[32];
-          if (eightAm) {
-            pickerEl.scrollTop = (eightAm as HTMLElement).offsetTop - 10;
-          }
-
-          document.addEventListener("click", function dismiss() {
-            pickerEl.remove();
-            document.removeEventListener("click", dismiss);
-          });
-        }, 0);
-
-        pickerEl.addEventListener("click", (ev) => ev.stopPropagation());
-
-      } catch (err) {
-        console.error("Time picker error:", err);
-      }
-    }, true);
+      },
+      true,
+    );
   }
 
   // rsvp deadline picker
@@ -842,7 +921,9 @@ function propose_meeting_modal_post_render(): void {
     const $input = $(e.currentTarget);
 
     const defaultDate = ((): Date => {
-      const cur = $<HTMLInputElement>("#propose-rsvp-by-value").val() as string | undefined;
+      const cur = $<HTMLInputElement>("#propose-rsvp-by-value").val() as
+        | string
+        | undefined;
       if (cur) {
         const parsed = new Date(cur);
         if (!Number.isNaN(parsed.getTime())) return parsed;
@@ -871,7 +952,12 @@ function propose_meeting_modal_post_render(): void {
           const inputEl = util.the($input);
           const rect = inputEl.getBoundingClientRect();
           const cal = instance.calendarContainer;
-          cal.classList.remove("arrowTop", "arrowBottom", "arrowLeft", "arrowRight");
+          cal.classList.remove(
+            "arrowTop",
+            "arrowBottom",
+            "arrowLeft",
+            "arrowRight",
+          );
           cal.style.position = "fixed";
           cal.style.transform = "none";
           cal.style.zIndex = "6000";
@@ -939,17 +1025,18 @@ function item_click_callback(
     const is_in_channel_narrow = narrow_state.stream_id() !== undefined;
     const is_stream_mode = compose_state.get_message_type() === "stream";
     const selected_stream_id = compose_state.stream_id();
-    const has_real_stream = selected_stream_id !== undefined && selected_stream_id !== 0;
+    const has_real_stream =
+      selected_stream_id !== undefined && selected_stream_id !== 0;
 
     // Must be in a channel view AND composing to a valid channel
     if (!is_in_channel_narrow || !is_stream_mode || !has_real_stream) {
-        return;
+      return;
     }
 
     dialog_widget.launch({
-      modal_title_html: $t_html({ defaultMessage: "Meeting RSVP" }),
+      modal_title_html: $t_html({defaultMessage: "Meeting RSVP"}),
       modal_content_html: render_add_rsvp_meeting_modal({}),
-      modal_submit_button_text: $t({ defaultMessage: "Submit" }),
+      modal_submit_button_text: $t({defaultMessage: "Submit"}),
       id: "add-rsvp-meeting-modal",
       form_id: "rsvp-meeting-form",
       update_submit_disabled_state_on_change: true,
@@ -1037,7 +1124,9 @@ function update_propose_channel_warning(): void {
     return;
   }
 
-  const subscriber_ids = new Set(peer_data.get_subscriber_ids_assert_loaded(stream_id));
+  const subscriber_ids = new Set(
+    peer_data.get_subscriber_ids_assert_loaded(stream_id),
+  );
   const invited_ids = user_pill.get_user_ids(invite_users_widget);
   const has_outside_user = invited_ids.some((id) => !subscriber_ids.has(id));
 
@@ -1054,9 +1143,9 @@ function update_propose_channel_warning(): void {
 
 export function launch_propose_meeting_modal(): void {
   dialog_widget.launch({
-    modal_title_html: $t_html({ defaultMessage: "Propose a Meeting" }),
+    modal_title_html: $t_html({defaultMessage: "Propose a Meeting"}),
     modal_content_html: render_add_propose_meeting_modal({}),
-    modal_submit_button_text: $t({ defaultMessage: "Submit" }),
+    modal_submit_button_text: $t({defaultMessage: "Submit"}),
     id: "add-propose-meeting-modal",
     form_id: "propose-meeting-form",
     update_submit_disabled_state_on_change: true,
@@ -1078,13 +1167,13 @@ function ordinal(n: number): string {
 }
 
 export const __test_only = {
-    set_invite_users_widget: (w: any) => {
-        invite_users_widget = w;
-    },
-    on_add_all_users_click,
-    update_rsvp_submit_button_state,
-    reset_composebox_widget_flag: () => {
-        composebox_add_meeting_dropdown_widget = false;
-    },
-    get_composebox_widget_flag: () => composebox_add_meeting_dropdown_widget,
+  set_invite_users_widget: (w: any) => {
+    invite_users_widget = w;
+  },
+  on_add_all_users_click,
+  update_rsvp_submit_button_state,
+  reset_composebox_widget_flag: () => {
+    composebox_add_meeting_dropdown_widget = false;
+  },
+  get_composebox_widget_flag: () => composebox_add_meeting_dropdown_widget,
 };
