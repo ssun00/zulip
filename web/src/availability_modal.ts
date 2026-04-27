@@ -73,6 +73,7 @@ export function open(meeting_id: number, on_confirmed?: () => void): void {
                         url: `/json/meetings/${meeting_id}/confirm`,
                         data: {winning_slot_id: JSON.stringify(selected)},
                         success() {
+                            dialog_widget.close();
                             if (on_confirmed) {
                                 on_confirmed();
                             }
