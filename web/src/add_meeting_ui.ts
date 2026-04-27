@@ -92,6 +92,10 @@ function submit_rsvp_meeting_form(): void {
             const new_stream = streams.find((s) => s.name === topic);
             if (new_stream) {
               send_message(new_stream.stream_id);
+            } else {
+              // The stream was created but cannot be found by name in the
+              // subscribed list. Close the modal so the user can investigate.
+              modals.close_if_open("add-rsvp-meeting-modal");
             }
           },
         });
@@ -110,17 +114,19 @@ function submit_propose_meeting_form(): void {
   assert(topic && dates_raw && times_raw && rsvp_by);
 
   const invitee_ids = user_pill.get_user_ids(invite_users_widget);
-  const stream_id = narrow_state.stream_id();
-  assert(stream_id !== undefined);
-
   const create_new_channel = $<HTMLInputElement>("#propose-create-channel").prop("checked") as boolean;
+  const stream_id = narrow_state.stream_id();
+
+  if (!create_new_channel && stream_id === undefined) {
+    return;
+  }
 
   const dates = dates_raw.split(",").map((s) => s.trim()).filter(Boolean);
   const times = times_raw.split(",").map((s) => s.trim()).filter(Boolean);
   const slots: { start_time: string }[] = [];
   for (const date of dates) {
     for (const time of times) {
-      slots.push({ start_time: `${date}T${time}:00` });
+      slots.push({ start_time: new Date(`${date}T${time}:00`).toISOString() });
     }
   }
 
@@ -152,6 +158,14 @@ function submit_propose_meeting_form(): void {
         const url = hash_util.by_stream_topic_url(target_stream_id, topic);
         browser_history.go_to_location(url);
       },
+      error() {
+        // The meeting was created on the server but the widget message
+        // could not be posted. Navigate to the channel so the user
+        // can see the state and manually retry posting.
+        modals.close_if_open("add-propose-meeting-modal");
+        const url = hash_util.by_stream_topic_url(target_stream_id, topic);
+        browser_history.go_to_location(url);
+      },
     });
   };
 
@@ -167,6 +181,8 @@ function submit_propose_meeting_form(): void {
     },
     success(data) {
       const result = data as { meeting_id: number; stream_id: number };
+      // Disable submit to prevent a duplicate meeting if the message send fails.
+      $("#add-propose-meeting-modal .dialog_submit_button").prop("disabled", true);
       send_message(result.stream_id, result.meeting_id);
     },
   });
@@ -192,9 +208,22 @@ function update_propose_submit_button_state(): void {
   const times = $<HTMLInputElement>("#propose-meeting-times-value").val()?.trim();
   const rsvp_by = $<HTMLInputElement>("#propose-rsvp-by-value").val()?.trim();
   const has_invitees = user_pill.get_user_ids(invite_users_widget).length > 0;
+  const create_new_channel = $<HTMLInputElement>("#propose-create-channel").prop("checked") as boolean;
+  const stream_id = narrow_state.stream_id();
 
   const $submit_button = $("#add-propose-meeting-modal .dialog_submit_button");
-  $submit_button.prop("disabled", !topic || !dates || !times || !rsvp_by || !has_invitees);
+  $submit_button.prop(
+    "disabled",
+    !topic || !dates || !times || !rsvp_by || !has_invitees || (!create_new_channel && stream_id === undefined),
+  );
+}
+
+function escape_html(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function populate_rsvp_user_dropdown(): void {
@@ -221,10 +250,10 @@ function populate_rsvp_user_dropdown(): void {
   for (const user of users) {
     const html = `
         <div class="rsvp-user-item">
-            <img src="${user.avatar_url}" class="avatar" />
+            <img src="${escape_html(user.avatar_url ?? "")}" class="avatar" />
             <div class="user-info">
-                <div class="user-name">${user.full_name}</div>
-                <div class="user-email">${user.email}</div>
+                <div class="user-name">${escape_html(user.full_name)}</div>
+                <div class="user-email">${escape_html(user.email)}</div>
             </div>
         </div>
     `;
@@ -261,10 +290,10 @@ function populate_propose_user_dropdown(): void {
   for (const user of users) {
     const html = `
             <div class="rsvp-user-item">
-                <img src="${user.avatar_url}" class="avatar" />
+                <img src="${escape_html(user.avatar_url ?? "")}" class="avatar" />
                 <div class="user-info">
-                    <div class="user-name">${user.full_name}</div>
-                    <div class="user-email">${user.email}</div>
+                    <div class="user-name">${escape_html(user.full_name)}</div>
+                    <div class="user-email">${escape_html(user.email)}</div>
                 </div>
             </div>`;
 
@@ -428,15 +457,13 @@ function rsvp_meeting_modal_post_render(): void {
       util.the($input),
       (selectedDate) => {
         const dt = new Date(selectedDate);
-        const tzOffsetMs = dt.getTimezoneOffset() * 60 * 1000;
-        const localDt = new Date(dt.getTime() - tzOffsetMs);
-        const isoValue = localDt.toISOString().slice(0, 16);
+        const isoValue = dt.toISOString();
 
         // Show human-readable string in the visible text input
         const formatted = timerender.get_full_datetime(dt, "time");
         $input.val(formatted);
 
-        // Store ISO value in hidden input — this is what submit/validation reads
+        // Store UTC ISO value in hidden input — this is what submit/validation reads
         $("#rsvp-meeting-datetime-value").val(isoValue).trigger("input");
 
         update_rsvp_submit_button_state();
@@ -854,9 +881,7 @@ function propose_meeting_modal_post_render(): void {
       util.the($input),
       (selectedDate) => {
         const dt = new Date(selectedDate);
-        const tzOffsetMs = dt.getTimezoneOffset() * 60 * 1000;
-        const localDt = new Date(dt.getTime() - tzOffsetMs);
-        const isoValue = localDt.toISOString().slice(0, 16);
+        const isoValue = dt.toISOString();
 
         $input.val(timerender.get_full_datetime(dt, "time"));
         $("#propose-rsvp-by-value").val(isoValue).trigger("input");
@@ -896,22 +921,21 @@ function propose_meeting_modal_post_render(): void {
 }
 
 function on_add_all_users_click(): void {
-  const stream_id = narrow_state.stream_id();
-
-  if (!invite_users_widget || !stream_id) {
+  if (!invite_users_widget) {
     return;
   }
 
-  const already_added_ids = new Set(
-    user_pill.get_user_ids(invite_users_widget),
-  );
-  const user_ids = peer_data.get_subscriber_ids_assert_loaded(stream_id);
+  const already_added_ids = new Set(user_pill.get_user_ids(invite_users_widget));
+  const stream_id = narrow_state.stream_id();
 
-  for (const id of user_ids) {
+  const candidate_ids: number[] = stream_id !== undefined
+    ? [...peer_data.get_subscriber_ids_assert_loaded(stream_id)]
+    : people.get_realm_users().map((u) => u.user_id);
+
+  for (const id of candidate_ids) {
     if (already_added_ids.has(id)) {
       continue;
     }
-
     const user = people.get_by_user_id(id);
     if (user && !user.is_bot) {
       user_pill.append_user(user, invite_users_widget);
