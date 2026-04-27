@@ -100,9 +100,10 @@ export function render({
                     const user = people.get_by_user_id(id);
                     if (!user) return "";
                     const has_submitted = submitted.has(id);
+                    const owner_label = id === owner_id ? " <em>(owner)</em>" : "";
                     return `
                         <div class="propose-invitee-row">
-                            <span class="user-mention${id === propose_data.me ? " user-mention-me" : ""}" data-user-id="${id}">@${user.full_name}</span>${has_submitted ? " <em>(Responded)</em>" : ""}
+                            <span class="user-mention${id === propose_data.me ? " user-mention-me" : ""}" data-user-id="${id}">@${user.full_name}</span>${owner_label}${has_submitted ? " <em>(Responded)</em>" : ""}
                         </div>`;
                 })
                 .join("")
@@ -149,6 +150,15 @@ export function render({
 
             const is_owner = meeting.owner_id === people.my_current_user_id();
             if (!is_invited && !is_owner) {
+                return;
+            }
+
+            const window_open = meeting.status === "proposed";
+            if (!is_owner && !window_open) {
+                $elem
+                    .find(".propose-availability-btn")
+                    .addClass("disabled")
+                    .attr("title", "The availability window has closed");
                 return;
             }
 
