@@ -25,6 +25,8 @@ export function activate({
         topic: extra_data.topic,
         invitees: extra_data.invitees ?? [],
         current_user_id: people.my_current_user_id(),
+        call_url: extra_data.call_url,
+        call_type: extra_data.call_type,
     });
 
     const widget_data: WidgetData = {
@@ -77,7 +79,7 @@ export function render({
 }): void {
     assert(widget_data.widget_type === "propose_meeting");
     const propose_data = widget_data.data as ProposeData;
-    const { meeting_id, topic, invitees, submitted, i_have_submitted } =
+    const { meeting_id, topic, invitees, submitted, i_have_submitted, call_url, call_type } =
         propose_data.get_widget_data();
 
     const me = people.my_current_user_id();
@@ -109,9 +111,19 @@ export function render({
                 .join("")
             : `<span class="rsvp-invitee-empty">No users invited</span>`;
 
+    const call_link_html = call_url
+        ? `<div class="rsvp-call-link">
+            <a href="${call_url}" target="_blank" rel="noopener noreferrer">
+                <i class="zulip-icon zulip-icon-${call_type === "voice" ? "voice-call" : "video-call"}" aria-hidden="true"></i>
+                ${call_type === "voice" ? "Join voice call" : "Join video call"}
+            </a>
+        </div>`
+        : "";
+
     const html = `
         <div class="rsvp-widget propose-meeting-widget">
             <div class="rsvp-topic">${topic}</div>
+            ${call_link_html}
             <div class="rsvp-invitees">
                 <div class="rsvp-invitees-label">Invited Users</div>
                 <em class="propose-response-count">Responses (${responded_count}/${total_count})</em>

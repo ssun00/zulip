@@ -7,6 +7,7 @@ import render_add_propose_meeting_modal from "../templates/add_propose_meeting_m
 
 import * as add_meeting from "./add_meeting.ts";
 import * as channel from "./channel.ts";
+import * as compose_call from "./compose_call.ts";
 import * as dialog_widget from "./dialog_widget.ts";
 import * as dropdown_widget from "./dropdown_widget.ts";
 import { $t, $t_html } from "./i18n.ts";
@@ -21,10 +22,96 @@ import * as user_pill from "./user_pill.ts";
 import * as flatpickr from "./flatpickr.ts";
 import * as util from "./util.ts";
 import * as compose_state from "./compose_state.ts";
+import {realm} from "./state_data.ts";
 
 let add_meeting_widget: dropdown_widget.DropdownWidget | undefined;
 let add_meeting_dropdown: tippy.Instance | undefined;
 let composebox_add_meeting_dropdown_widget = false;
+
+function generate_call_url(
+    is_audio: boolean,
+    topic: string,
+    callback: (url: string | null) => void,
+): void {
+    const available_providers = realm.realm_available_video_chat_providers;
+    const provider = realm.realm_video_chat_provider;
+
+    if (provider === available_providers.disabled?.id) {
+        callback(null);
+        return;
+    }
+
+    const oauth_provider = compose_call.current_oauth_call_provider();
+    if (oauth_provider !== null) {
+        void channel.post({
+            url: `/json/calls/${oauth_provider}/create`,
+            data: {is_video_call: !is_audio},
+            success(data) {
+                callback((data as {url: string}).url ?? null);
+            },
+            error() {
+                callback(null);
+            },
+        });
+        return;
+    }
+
+    switch (provider) {
+        case available_providers.jitsi_meet?.id: {
+            const video_call_id = util.random_int(100000000000000, 999999999999999);
+            const url = compose_call.get_jitsi_server_url(video_call_id.toString());
+            if (url === null) {
+                callback(null);
+                return;
+            }
+            url.hash = `config.startWithVideoMuted=${is_audio ? "true" : "false"}`;
+            callback(url.toString());
+            return;
+        }
+        case available_providers.big_blue_button?.id: {
+            void channel.get({
+                url: "/json/calls/bigbluebutton/create",
+                data: {meeting_name: `${topic} meeting`, voice_only: is_audio},
+                success(data) {
+                    callback((data as {url: string}).url ?? null);
+                },
+                error() {
+                    callback(null);
+                },
+            });
+            return;
+        }
+        case available_providers.nextcloud_talk?.id: {
+            void channel.post({
+                url: "/json/calls/nextcloud_talk/create",
+                data: {room_name: `${topic} conversation`},
+                success(data) {
+                    callback((data as {url: string}).url ?? null);
+                },
+                error() {
+                    callback(null);
+                },
+            });
+            return;
+        }
+        case available_providers.constructor_groups?.id: {
+            void channel.post({
+                url: "/json/calls/constructorgroups/create",
+                data: {},
+                success(data) {
+                    callback((data as {url: string}).url ?? null);
+                },
+                error() {
+                    callback(null);
+                },
+            });
+            return;
+        }
+        default: {
+            callback(null);
+        }
+    }
+}
 
 function submit_rsvp_meeting_form(): void {
   const topic = $<HTMLInputElement>("#rsvp-meeting-topic").val()?.trim();
@@ -41,68 +128,82 @@ function submit_rsvp_meeting_form(): void {
     "checked",
   ) as boolean;
 
-  const extra_data = {
-    widget_type: "rsvp",
-    extra_data: {
-      topic,
-      datetime,
-      invitees: invitee_ids,
-    },
-  };
+  const include_call = $<HTMLInputElement>("#rsvp-include-call").prop("checked") as boolean;
+  const is_audio = ($("input[name='rsvp-call-type']:checked").val() as string) === "voice";
 
-  const send_message = (target_stream_id: number): void => {
-    void channel.post({
-      url: "/json/messages",
-      data: {
-        type: "stream",
-        to: target_stream_id,
+  function proceed(call_url: string | null): void {
+    const call_type = include_call ? (is_audio ? "voice" : "video") : undefined;
+
+    const extra_data = {
+      widget_type: "rsvp",
+      extra_data: {
         topic,
-        content: "/rsvp",
-        widget_content: JSON.stringify(extra_data),
+        datetime,
+        invitees: invitee_ids,
+        ...(call_url ? {call_url, call_type} : {}),
       },
-      success() {
-        modals.close_if_open("add-rsvp-meeting-modal");
-        const url = hash_util.by_stream_topic_url(target_stream_id, topic);
-        browser_history.go_to_location(url);
-      },
-    });
-  };
+    };
 
-  if (create_new_channel) {
-    // Step 1: Create the new stream, then post the message to it
-    void channel.post({
-      url: "/json/users/me/subscriptions",
-      data: {
-        subscriptions: JSON.stringify([{ name: topic }]),
-        principals: JSON.stringify([
-          people.my_current_user_id(),
-          ...invitee_ids,
-        ]),
-        announce: false,
-      },
-      success() {
-        // Find the new stream id by looking it up by name
-        void channel.get({
-          url: "/json/streams",
-          data: { include_subscribed: true },
-          success(streams_data) {
-            const streams = (
-              streams_data as { streams: { stream_id: number; name: string }[] }
-            ).streams;
-            const new_stream = streams.find((s) => s.name === topic);
-            if (new_stream) {
-              send_message(new_stream.stream_id);
-            } else {
-              // The stream was created but cannot be found by name in the
-              // subscribed list. Close the modal so the user can investigate.
-              modals.close_if_open("add-rsvp-meeting-modal");
-            }
-          },
-        });
-      },
-    });
+    const send_message = (target_stream_id: number): void => {
+      void channel.post({
+        url: "/json/messages",
+        data: {
+          type: "stream",
+          to: target_stream_id,
+          topic,
+          content: "/rsvp",
+          widget_content: JSON.stringify(extra_data),
+        },
+        success() {
+          modals.close_if_open("add-rsvp-meeting-modal");
+          const url = hash_util.by_stream_topic_url(target_stream_id, topic);
+          browser_history.go_to_location(url);
+        },
+      });
+    };
+
+    if (create_new_channel) {
+      // Step 1: Create the new stream, then post the message to it
+      void channel.post({
+        url: "/json/users/me/subscriptions",
+        data: {
+          subscriptions: JSON.stringify([{ name: topic }]),
+          principals: JSON.stringify([
+            people.my_current_user_id(),
+            ...invitee_ids,
+          ]),
+          announce: false,
+        },
+        success() {
+          // Find the new stream id by looking it up by name
+          void channel.get({
+            url: "/json/streams",
+            data: { include_subscribed: true },
+            success(streams_data) {
+              const streams = (
+                streams_data as { streams: { stream_id: number; name: string }[] }
+              ).streams;
+              const new_stream = streams.find((s) => s.name === topic);
+              if (new_stream) {
+                send_message(new_stream.stream_id);
+              } else {
+                // The stream was created but cannot be found by name in the
+                // subscribed list. Close the modal so the user can investigate.
+                modals.close_if_open("add-rsvp-meeting-modal");
+              }
+            },
+          });
+        },
+      });
+    } else {
+      send_message(stream_id);
+    }
+  }
+
+  if (include_call) {
+    generate_call_url(is_audio, topic, proceed);
   } else {
-    send_message(stream_id);
+    proceed(null);
   }
 }
 
@@ -130,62 +231,72 @@ function submit_propose_meeting_form(): void {
     }
   }
 
-  const invitee_names = invitee_ids
-    .map((id) => people.get_by_user_id(id)?.full_name ?? String(id))
-    .join(", ");
+  const include_call = $<HTMLInputElement>("#propose-include-call").prop("checked") as boolean;
+  const is_audio = ($("input[name='propose-call-type']:checked").val() as string) === "voice";
 
-  const send_message = (target_stream_id: number, meeting_id: number): void => {
-    const extra_data = {
-      widget_type: "propose_meeting",
-      extra_data: {
-        meeting_id,
-        topic,
-        invitees: invitee_ids,
-      },
+  function proceed(call_url: string | null): void {
+    const call_type = include_call ? (is_audio ? "voice" : "video") : undefined;
+
+    const send_message = (target_stream_id: number, meeting_id: number): void => {
+      const extra_data = {
+        widget_type: "propose_meeting",
+        extra_data: {
+          meeting_id,
+          topic,
+          invitees: invitee_ids,
+          ...(call_url ? {call_url, call_type} : {}),
+        },
+      };
+
+      void channel.post({
+        url: "/json/messages",
+        data: {
+          type: "stream",
+          to: target_stream_id,
+          topic,
+          content: "/propose_meeting",
+          widget_content: JSON.stringify(extra_data),
+        },
+        success() {
+          modals.close_if_open("add-propose-meeting-modal");
+          const url = hash_util.by_stream_topic_url(target_stream_id, topic);
+          browser_history.go_to_location(url);
+        },
+        error() {
+          // The meeting was created on the server but the widget message
+          // could not be posted. Navigate to the channel so the user
+          // can see the state and manually retry posting.
+          modals.close_if_open("add-propose-meeting-modal");
+          const url = hash_util.by_stream_topic_url(target_stream_id, topic);
+          browser_history.go_to_location(url);
+        },
+      });
     };
 
     void channel.post({
-      url: "/json/messages",
+      url: "/json/meetings",
       data: {
-        type: "stream",
-        to: target_stream_id,
         topic,
-        content: "/propose_meeting",
-        widget_content: JSON.stringify(extra_data),
+        slots: JSON.stringify(slots),
+        deadline: rsvp_by,
+        invite_user_ids: JSON.stringify(invitee_ids),
+        create_channel: JSON.stringify(create_new_channel),
+        stream_id: create_new_channel ? undefined : stream_id,
       },
-      success() {
-        modals.close_if_open("add-propose-meeting-modal");
-        const url = hash_util.by_stream_topic_url(target_stream_id, topic);
-        browser_history.go_to_location(url);
-      },
-      error() {
-        // The meeting was created on the server but the widget message
-        // could not be posted. Navigate to the channel so the user
-        // can see the state and manually retry posting.
-        modals.close_if_open("add-propose-meeting-modal");
-        const url = hash_util.by_stream_topic_url(target_stream_id, topic);
-        browser_history.go_to_location(url);
+      success(data) {
+        const result = data as { meeting_id: number; stream_id: number };
+        // Disable submit to prevent a duplicate meeting if the message send fails.
+        $("#add-propose-meeting-modal .dialog_submit_button").prop("disabled", true);
+        send_message(result.stream_id, result.meeting_id);
       },
     });
-  };
+  }
 
-  void channel.post({
-    url: "/json/meetings",
-    data: {
-      topic,
-      slots: JSON.stringify(slots),
-      deadline: rsvp_by,
-      invite_user_ids: JSON.stringify(invitee_ids),
-      create_channel: JSON.stringify(create_new_channel),
-      stream_id: create_new_channel ? undefined : stream_id,
-    },
-    success(data) {
-      const result = data as { meeting_id: number; stream_id: number };
-      // Disable submit to prevent a duplicate meeting if the message send fails.
-      $("#add-propose-meeting-modal .dialog_submit_button").prop("disabled", true);
-      send_message(result.stream_id, result.meeting_id);
-    },
-  });
+  if (include_call) {
+    generate_call_url(is_audio, topic, proceed);
+  } else {
+    proceed(null);
+  }
 }
 
 function update_rsvp_submit_button_state(): void {
@@ -522,6 +633,12 @@ function rsvp_meeting_modal_post_render(): void {
         },
       },
     );
+  });
+
+  // Show/hide the call toggle based on whether video chat is configured.
+  $(".rsvp-call-toggle-section").toggle(compose_call.compute_show_video_chat_button());
+  $("#rsvp-include-call").on("change", function () {
+    $("#rsvp-call-type-row").toggle($(this).prop("checked") as boolean);
   });
 
   // Set initial submit button state (may be disabled if not in a channel narrow)
@@ -917,6 +1034,12 @@ function propose_meeting_modal_post_render(): void {
         },
       },
     );
+  });
+
+  // Show/hide the call toggle based on whether video chat is configured.
+  $(".propose-call-toggle-section").toggle(compose_call.compute_show_video_chat_button());
+  $("#propose-include-call").on("change", function () {
+    $("#propose-call-type-row").toggle($(this).prop("checked") as boolean);
   });
 }
 

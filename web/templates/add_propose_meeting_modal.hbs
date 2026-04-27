@@ -65,5 +65,22 @@
                 {{t 'Create new channel'}}
             </label>
         </div>
+        <div class="input-group propose-call-toggle-section">
+            <label class="checkbox display-block">
+                <input type="checkbox" id="propose-include-call" name="include_call" />
+                <span class="rendered-checkbox"></span>
+                {{t 'Include video/voice call'}}
+            </label>
+            <div id="propose-call-type-row" style="display: none; margin-top: 6px; margin-left: 22px;">
+                <label style="margin-right: 16px;">
+                    <input type="radio" name="propose-call-type" value="video" checked />
+                    {{t 'Video'}}
+                </label>
+                <label>
+                    <input type="radio" name="propose-call-type" value="voice" />
+                    {{t 'Voice only'}}
+                </label>
+            </div>
+        </div>
     </form>
 </div>
