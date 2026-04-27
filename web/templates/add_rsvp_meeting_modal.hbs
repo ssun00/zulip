@@ -44,5 +44,22 @@
                 {{t 'Create new channel'}}
             </label>
         </div>
+        <div class="input-group rsvp-call-toggle-section">
+            <label class="checkbox display-block">
+                <input type="checkbox" id="rsvp-include-call" name="include_call" />
+                <span class="rendered-checkbox"></span>
+                {{t 'Include video/voice call'}}
+            </label>
+            <div id="rsvp-call-type-row" style="display: none; margin-top: 6px; margin-left: 22px;">
+                <label style="margin-right: 16px;">
+                    <input type="radio" name="rsvp-call-type" value="video" checked />
+                    {{t 'Video'}}
+                </label>
+                <label>
+                    <input type="radio" name="rsvp-call-type" value="voice" />
+                    {{t 'Voice only'}}
+                </label>
+            </div>
+        </div>
     </form>
 </div>
