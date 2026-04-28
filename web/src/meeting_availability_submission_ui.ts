@@ -209,9 +209,8 @@ export function open_availability_modal(
 
       // Build slot_id_map: "2026-04-24T09:00" -> slot_id
       for (const slot of result.slots) {
-        // Backend returns UTC ISO; convert to local time to match grid keys
-        const utc_date = new Date(slot.start_time);
-        const local_key = `${utc_date.getFullYear()}-${String(utc_date.getMonth()+1).padStart(2,"0")}-${String(utc_date.getDate()).padStart(2,"0")}T${String(utc_date.getHours()).padStart(2,"0")}:${String(utc_date.getMinutes()).padStart(2,"0")}`;
+        // Backend stores naive local time but isoformat() adds +00:00; strip to match grid keys
+        const local_key = slot.start_time.slice(0, 16).replace(" ", "T");
         slot_id_map.set(local_key, slot.slot_id);
 
         //Populate availability_data with existing responses
