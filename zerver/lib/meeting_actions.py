@@ -148,7 +148,6 @@ def do_create_meeting(
 
     if create_channel:
         # All meeting streams live in a shared "meetings" folder for discoverability.
-        folder, _ = ChannelFolder.objects.get_or_create(realm=realm, name="meetings")
         folder, created = ChannelFolder.objects.get_or_create(realm=realm, name="meetings")
 
         #send event if folder was just created so frontend knows about it
