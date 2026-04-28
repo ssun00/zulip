@@ -191,7 +191,7 @@ export function open_availability_modal(
   current_availability_data = availability_data;
   current_callback = callback;
   // Pre-populate with user's previous selections if any
-  selected_slots = new Set(availability_data.responses.get(availability_data.me) ?? []);
+  selected_slots = new Set(availability_data.responses?.get(availability_data.me) ?? []);
 
   // Fetch slots + existing responses from backend
   void channel.get({
@@ -223,7 +223,7 @@ export function open_availability_modal(
       }
 
       // Pre-populate current user's prior selections
-      selected_slots = new Set(availability_data.responses.get(availability_data.me) ?? []);
+      selected_slots = new Set(availability_data.responses?.get(availability_data.me) ?? []);
       launch_modal(meeting_id, callback);
     },
     error() {
