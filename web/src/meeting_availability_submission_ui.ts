@@ -218,7 +218,7 @@ export function open_availability_modal(
         for (const user_id of slot.available_user_ids) {
           const existing =
             availability_data.responses.get(user_id) ?? new Set<string>();
-          existing.add(key);
+          existing.add(local_key);
           availability_data.responses.set(user_id, existing);
         }
       }
