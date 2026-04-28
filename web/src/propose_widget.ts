@@ -207,39 +207,19 @@ export function render({
 
                 void import("./meeting_availability_submission_ui.ts").then(
                     ({ open_availability_modal }) => {
-                        open_availability_modal(availability_data, (event: AvailabilityEvent) => {
-                            // map available slot keys back to slot_ids for the backend
-                            const slot_responses: Record<string, boolean> = {};
-                            for (const slot of meeting.slots) {
-                                // slot.start_time from backend is like "2026-04-19T10:00:00+00:00"
-                                // availability slot keys are like "2026-04-19T10:00"
-                                const slot_key = slot.start_time.slice(0, 16);
-                                slot_responses[String(slot.slot_id)] =
-                                    event.available_slots.includes(slot_key);
-                            }
-
-                            void channel.patch({
-                                url: `/json/meetings/${meeting_id}/responses`,
-                                data: {
-                                    slot_responses: JSON.stringify(slot_responses),
-                                },
-                                success() {
-                                    const av_event = propose_data.availability_event();
-                                    propose_data.handle_availability_event(
-                                        propose_data.me,
-                                        av_event,
-                                    );
-                                    callback(av_event);
-                                    render({
-                                        $elem,
-                                        callback,
-                                        widget_data,
-                                        message,
-                                        rerender: true,
-                                    });
-                                },
-                            });
-                        });
+                        open_availability_modal(
+                            meeting_id,
+                            availability_data,
+                            (_event: AvailabilityEvent) => {
+                                const av_event = propose_data.availability_event();
+                                propose_data.handle_availability_event(
+                                    propose_data.me,
+                                    av_event,
+                                );
+                                callback(av_event);
+                                render({$elem, callback, widget_data, message, rerender: true});
+                            },
+                        );
                     },
                 );
             });
