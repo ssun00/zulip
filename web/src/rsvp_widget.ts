@@ -24,6 +24,8 @@ export function activate({
         datetime: extra_data.datetime,
         invitees: extra_data.invitees ?? [],
         current_user_id: people.my_current_user_id(),
+        call_url: extra_data.call_url,
+        call_type: extra_data.call_type,
     });
 
     const widget_data = { widget_type: "rsvp" as const, data: rsvp_data };
@@ -89,7 +91,7 @@ export function render({
 }): void {
     assert(widget_data.widget_type === "rsvp");
     const rsvp_data = widget_data.data as RsvpData;
-    const { topic, datetime, invitees, buckets, my_response } = rsvp_data.get_widget_data();
+    const { topic, datetime, invitees, buckets, my_response, call_url, call_type } = rsvp_data.get_widget_data();
 
     function names(ids: number[]): string {
         return ids
@@ -125,10 +127,20 @@ export function render({
         })
         .join("");
 
+    const call_link_html = call_url
+        ? `<div class="rsvp-call-link">
+            <a href="${call_url}" target="_blank" rel="noopener noreferrer">
+                <i class="zulip-icon zulip-icon-${call_type === "voice" ? "voice-call" : "video-call"}" aria-hidden="true"></i>
+                ${call_type === "voice" ? "Join voice call" : "Join video call"}
+            </a>
+        </div>`
+        : "";
+
     const html = `
         <div class="rsvp-widget">
             <div class="rsvp-topic">${topic}</div>
             <div class="rsvp-datetime">${format_datetime(datetime)}</div>
+            ${call_link_html}
             <div class="rsvp-invitees">
                 <span class="rsvp-invitees-label">Invited Users</span>
                 <span class="rsvp-invitees-list">${invitees_html}</span>
