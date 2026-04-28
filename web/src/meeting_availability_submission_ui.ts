@@ -190,8 +190,8 @@ export function open_availability_modal(
 ): void {
   current_availability_data = availability_data;
   current_callback = callback;
-  // Pre-populate with user's previous selections if any
-  selected_slots = new Set(availability_data.responses?.get(availability_data.me) ?? []);
+  slot_id_map = new Map();
+  selected_slots = new Set();
 
   // Fetch slots + existing responses from backend
   void channel.get({
