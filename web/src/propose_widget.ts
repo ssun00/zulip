@@ -136,7 +136,7 @@ export function render({
                    ${!is_invited ? 'title="You were not invited to this meeting"' : ""}>
                     ${btn_label}
                 </a>
-                <div style="padding-left: 8px; font-style: italic; font-size: 0.85em; margin-top: 2px;">
+                <div class="propose-deadline-row" style="padding-left: 8px; font-style: italic; font-size: 0.85em; margin-top: 2px;">
                     <em>${deadline_action} by <span class="propose-deadline-text"></span></em>
                 </div>
             </div>
@@ -154,6 +154,7 @@ export function render({
                 deadline: string;
                 owner_id: number;
                 status: string;
+                confirmed_slot_id: number | null;
                 slots: { slot_id: number; start_time: string; end_time: string | null }[];
             };
 
@@ -161,7 +162,40 @@ export function render({
             $elem.find(".propose-deadline-text").text(format_deadline(meeting.deadline));
 
             const is_owner = meeting.owner_id === people.my_current_user_id();
+
+            if (meeting.status === "confirmed") {
+                const confirmed_slot = meeting.slots.find(
+                    (s) => s.slot_id === meeting.confirmed_slot_id,
+                );
+                const time_str = confirmed_slot
+                    ? format_deadline(confirmed_slot.start_time)
+                    : "";
+                const notice = time_str
+                    ? `Meeting confirmed for ${time_str}.`
+                    : "This meeting has been confirmed.";
+                $elem
+                    .find(".propose-availability-btn")
+                    .replaceWith(
+                        `<span class="propose-meeting-status-msg">${notice}</span>`,
+                    );
+                $elem.find(".propose-deadline-row").hide();
+                return;
+            }
+
+            const is_past_deadline =
+                meeting.status === "deadline_passed" ||
+                new Date(meeting.deadline) < new Date();
+
             if (!is_invited && !is_owner) {
+                return;
+            }
+
+            if (!is_owner && is_past_deadline) {
+                $elem
+                    .find(".propose-availability-btn")
+                    .replaceWith(
+                        `<span class="propose-meeting-status-msg">Availability submission is closed.</span>`,
+                    );
                 return;
             }
 
