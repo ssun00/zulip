@@ -223,7 +223,12 @@ export function open_availability_modal(
       }
 
       // Pre-populate current user's prior selections
-      selected_slots = new Set(availability_data.responses?.get(availability_data.me) ?? []);
+      selected_slots = new Set(
+        availability_data.responses?.get(availability_data.me) ?? [],
+      );
+      console.log("slot_id_map keys:", [...slot_id_map.keys()]);
+      console.log("selected_slots:", [...selected_slots]);
+      console.log("grid all_slots:", current_availability_data.get_all_slots());
       launch_modal(meeting_id, callback);
     },
     error() {

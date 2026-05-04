@@ -235,8 +235,8 @@ def get_ranked_slots(meeting: Meeting) -> list[dict[str, object]]:
     return [
         {
             "slot_id": slot.id,
-            "start_time": slot.start_time.isoformat(),
-            "end_time": slot.end_time.isoformat() if slot.end_time else None,
+            "start_time": slot.start_time.astimezone().strftime("%Y-%m-%dT%H:%M"),
+            "end_time": slot.end_time.astimezone().strftime("%Y-%m-%dT%H:%M") if slot.end_time else None,
             "available_count": slot.available_count,
             "available_user_ids": list(
                 slot.responses.filter(available=True).values_list("user_id", flat=True)
