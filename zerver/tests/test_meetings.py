@@ -174,3 +174,251 @@ class MeetingsBackendTest(ZulipTestCase):
 
         meeting.refresh_from_db()
         self.assertEqual(meeting.status, Meeting.Status.DEADLINE_PASSED)
+
+
+class MeetingsViewTest(ZulipTestCase):
+    def test_get_meeting_candidates(self) -> None:
+        hamlet = self.example_user("hamlet")
+        self.login_user(hamlet)
+
+        # No stream name
+        result = self.client_get("/json/meetings/candidates")
+        self.assert_json_success(result)
+        self.assertIn("users", result.json())
+
+        # With stream name
+        stream_name = "test_candidates_stream"
+        self.make_stream(stream_name)
+        self.subscribe(hamlet, stream_name)
+        result = self.client_get("/json/meetings/candidates", {"stream_name": stream_name})
+        self.assert_json_success(result)
+
+    def test_create_meeting_view(self) -> None:
+        hamlet = self.example_user("hamlet")
+        self.login_user(hamlet)
+        future_deadline = (datetime.now(tz=timezone.utc) + timedelta(days=1)).isoformat()
+        
+        # Test naive datetime handling and create_channel=True (hits lib/meeting_actions.py:151-163)
+        naive_start = (datetime.now() + timedelta(days=2)).replace(microsecond=0).isoformat()
+        result = self.client_post("/json/meetings", {
+            "topic": "View Meeting",
+            "slots": '[{"start_time": "' + naive_start + '"}]',
+            "deadline": future_deadline,
+            "invite_user_ids": "[]",
+            "create_channel": "true",
+        })
+        self.assert_json_success(result)
+        meeting_id = result.json()["meeting_id"]
+
+        # Test create_channel=False with stream_id
+        stream = self.make_stream("existing_stream")
+        self.subscribe(hamlet, stream.name)
+        result = self.client_post("/json/meetings", {
+            "topic": "Existing Stream Meeting",
+            "slots": '[{"start_time": "' + future_deadline + '"}]',
+            "deadline": future_deadline,
+            "invite_user_ids": "[]",
+            "create_channel": "false",
+            "stream_id": stream.id,
+        })
+        self.assert_json_success(result)
+
+        # Test error: stream_id missing
+        result = self.client_post("/json/meetings", {
+            "topic": "Missing Stream ID",
+            "slots": '[{"start_time": "' + future_deadline + '"}]',
+            "deadline": future_deadline,
+            "invite_user_ids": "[]",
+            "create_channel": "false",
+        })
+        self.assert_json_error(result, "stream_id is required when create_channel is False.")
+
+    def test_get_meeting_view(self) -> None:
+        hamlet = self.example_user("hamlet")
+        self.login_user(hamlet)
+        stream = self.make_stream("get_meeting_stream")
+        self.subscribe(hamlet, stream.name)
+        meeting = do_create_meeting(
+            hamlet, "Topic", [(datetime.now(tz=timezone.utc) + timedelta(days=1), None)],
+            datetime.now(tz=timezone.utc) + timedelta(hours=1), [], False, stream
+        )
+        
+        result = self.client_get(f"/json/meetings/{meeting.id}")
+        self.assert_json_success(result)
+        self.assertEqual(result.json()["topic"], "Topic")
+
+    def test_upsert_meeting_responses_view(self) -> None:
+        hamlet = self.example_user("hamlet")
+        self.login_user(hamlet)
+        stream = self.make_stream("upsert_view_stream")
+        self.subscribe(hamlet, stream.name)
+        meeting = do_create_meeting(
+            hamlet, "Topic", [(datetime.now(tz=timezone.utc) + timedelta(days=1), None)],
+            datetime.now(tz=timezone.utc) + timedelta(hours=1), [], False, stream
+        )
+        slot_id = meeting.slots.get().id
+
+        # Valid response
+        result = self.client_patch(f"/json/meetings/{meeting.id}/responses", {
+            "slot_responses": '{"' + str(slot_id) + '": true}',
+        })
+        self.assert_json_success(result)
+
+        # Invalid slot IDs (not integers)
+        result = self.client_patch(f"/json/meetings/{meeting.id}/responses", {
+            "slot_responses": '{"not_an_int": true}',
+        })
+        self.assert_json_error(result, "slot_responses keys must be integer slot IDs.")
+
+    def test_get_meeting_responses_view(self) -> None:
+        hamlet = self.example_user("hamlet")
+        self.login_user(hamlet)
+        stream = self.make_stream("responses_view_stream")
+        self.subscribe(hamlet, stream.name)
+        meeting = do_create_meeting(
+            hamlet, "Topic", [(datetime.now(tz=timezone.utc) + timedelta(days=1), None)],
+            datetime.now(tz=timezone.utc) + timedelta(hours=1), [], False, stream
+        )
+        
+        result = self.client_get(f"/json/meetings/{meeting.id}/responses")
+        self.assert_json_success(result)
+        self.assertIn("slots", result.json())
+
+    def test_confirm_meeting_view(self) -> None:
+        hamlet = self.example_user("hamlet")
+        self.login_user(hamlet)
+        stream = self.make_stream("confirm_view_stream")
+        self.subscribe(hamlet, stream.name)
+        meeting = do_create_meeting(
+            hamlet, "Topic", [(datetime.now(tz=timezone.utc) + timedelta(days=1), None)],
+            datetime.now(tz=timezone.utc) + timedelta(hours=1), [], False, stream
+        )
+        slot_id = meeting.slots.get().id
+
+        result = self.client_post(f"/json/meetings/{meeting.id}/confirm", {
+            "winning_slot_id": slot_id,
+        })
+        self.assert_json_success(result)
+
+
+class MeetingModelTest(ZulipTestCase):
+    def test_meeting_clean_invalid_slot(self) -> None:
+        # Hits models/meetings.py:33-37
+        from django.core.exceptions import ValidationError
+        from zerver.models.meetings import MeetingSlot
+        hamlet = self.example_user("hamlet")
+        stream = self.make_stream("model_test_stream")
+        meeting1 = Meeting.objects.create(
+            owner=hamlet, topic="M1", stream=stream, deadline=datetime.now(tz=timezone.utc)
+        )
+        meeting2 = Meeting.objects.create(
+            owner=hamlet, topic="M2", stream=stream, deadline=datetime.now(tz=timezone.utc)
+        )
+        slot2 = MeetingSlot.objects.create(meeting=meeting2, start_time=datetime.now(tz=timezone.utc))
+        
+        meeting1.confirmed_slot = slot2
+        with self.assertRaisesRegex(ValidationError, "The confirmed slot must belong to this meeting."):
+            meeting1.clean()
+
+
+class MeetingActionsCoverageTest(ZulipTestCase):
+    def test_do_create_meeting_invalid_invite_user_ids(self) -> None:
+        # Hits lib/meeting_actions.py:118
+        hamlet = self.example_user("hamlet")
+        stream = self.make_stream("existing_stream_1")
+        self.subscribe(hamlet, stream.name)
+        deadline = datetime.now(tz=timezone.utc) + timedelta(days=1)
+        with self.assertRaisesRegex(JsonableError, "Invalid invite_user_ids: \[999999\]"):
+            do_create_meeting(hamlet, "Topic", [(datetime.now(tz=timezone.utc), None)], deadline, [999999], False, stream)
+
+    def test_do_create_meeting_past_deadline(self) -> None:
+        # Hits lib/meeting_actions.py:145
+        hamlet = self.example_user("hamlet")
+        past_deadline = datetime.now(tz=timezone.utc) - timedelta(days=1)
+        with self.assertRaisesRegex(JsonableError, "Deadline must be in the future."):
+            do_create_meeting(hamlet, "Topic", [(datetime.now(tz=timezone.utc), None)], past_deadline, [], True)
+
+    def test_do_create_meeting_no_slots(self) -> None:
+        # Hits lib/meeting_actions.py:147
+        hamlet = self.example_user("hamlet")
+        deadline = datetime.now(tz=timezone.utc) + timedelta(days=1)
+        with self.assertRaisesRegex(JsonableError, "At least one time slot is required."):
+            do_create_meeting(hamlet, "Topic", [], deadline, [], True)
+
+    def test_do_create_meeting_no_stream_no_create(self) -> None:
+        # Hits lib/meeting_actions.py:165
+        hamlet = self.example_user("hamlet")
+        deadline = datetime.now(tz=timezone.utc) + timedelta(days=1)
+        with self.assertRaisesRegex(JsonableError, "Either create_channel must be True or a stream must be provided."):
+            do_create_meeting(hamlet, "Topic", [(datetime.now(tz=timezone.utc), None)], deadline, [], False, None)
+
+    def test_do_upsert_responses_confirmed_meeting(self) -> None:
+        # Hits lib/meeting_actions.py:207
+        hamlet = self.example_user("hamlet")
+        stream = self.make_stream("existing_stream_2")
+        self.subscribe(hamlet, stream.name)
+        meeting = do_create_meeting(hamlet, "Topic", [(datetime.now(tz=timezone.utc) + timedelta(days=1), None)], datetime.now(tz=timezone.utc) + timedelta(hours=1), [], False, stream)
+        slot_id = meeting.slots.get().id
+        do_confirm_meeting(hamlet, meeting, slot_id)
+        with self.assertRaisesRegex(JsonableError, "This meeting has already been confirmed."):
+            do_upsert_responses(hamlet, meeting, {slot_id: True})
+
+    def test_do_upsert_responses_past_deadline(self) -> None:
+        # Hits lib/meeting_actions.py:209
+        hamlet = self.example_user("hamlet")
+        stream = self.make_stream("existing_stream_3")
+        self.subscribe(hamlet, stream.name)
+        deadline = datetime.now(tz=timezone.utc) + timedelta(minutes=1)
+        meeting = do_create_meeting(hamlet, "Topic", [(datetime.now(tz=timezone.utc) + timedelta(days=1), None)], deadline, [], False, stream)
+        slot_id = meeting.slots.get().id
+        with time_machine.travel(deadline + timedelta(minutes=1), tick=False):
+            with self.assertRaisesRegex(JsonableError, "The RSVP deadline has passed."):
+                do_upsert_responses(hamlet, meeting, {slot_id: True})
+
+    def test_do_upsert_responses_unknown_slot_id(self) -> None:
+        # Hits lib/meeting_actions.py:215
+        hamlet = self.example_user("hamlet")
+        stream = self.make_stream("existing_stream_4")
+        self.subscribe(hamlet, stream.name)
+        meeting = do_create_meeting(hamlet, "Topic", [(datetime.now(tz=timezone.utc) + timedelta(days=1), None)], datetime.now(tz=timezone.utc) + timedelta(hours=1), [], False, stream)
+        with self.assertRaisesRegex(JsonableError, "Unknown slot IDs: \[999999\]"):
+            do_upsert_responses(hamlet, meeting, {999999: True})
+
+    def test_do_confirm_meeting_already_confirmed(self) -> None:
+        # Hits lib/meeting_actions.py:245
+        hamlet = self.example_user("hamlet")
+        stream = self.make_stream("existing_stream_5")
+        self.subscribe(hamlet, stream.name)
+        meeting = do_create_meeting(hamlet, "Topic", [(datetime.now(tz=timezone.utc) + timedelta(days=1), None)], datetime.now(tz=timezone.utc) + timedelta(hours=1), [], False, stream)
+        slot_id = meeting.slots.get().id
+        do_confirm_meeting(hamlet, meeting, slot_id)
+        with self.assertRaisesRegex(JsonableError, "Meeting is already confirmed."):
+            do_confirm_meeting(hamlet, meeting, slot_id)
+
+    def test_access_meeting_for_user_invalid_id(self) -> None:
+        # Hits lib/meeting_actions.py:73-74
+        hamlet = self.example_user("hamlet")
+        with self.assertRaisesRegex(JsonableError, "Meeting not found."):
+            access_meeting_for_user(hamlet, 999999)
+
+    def test_assert_user_can_submit_meeting_responses_not_subscribed(self) -> None:
+        # Hits lib/meeting_actions.py:85-87
+        hamlet = self.example_user("hamlet")
+        othello = self.example_user("othello")
+        stream = self.make_stream("public_stream", invite_only=False)
+        self.subscribe(hamlet, stream.name)
+        # othello is NOT subscribed, but can access the stream because it's public.
+        meeting = do_create_meeting(hamlet, "Topic", [(datetime.now(tz=timezone.utc) + timedelta(days=1), None)], datetime.now(tz=timezone.utc) + timedelta(hours=1), [], False, stream)
+        
+        with self.assertRaisesRegex(JsonableError, "You must be subscribed to this meeting's channel to submit availability."):
+            assert_user_can_submit_meeting_responses(othello, meeting)
+
+    def test_do_confirm_meeting_invalid_slot_id(self) -> None:
+        # Hits lib/meeting_actions.py:249-250
+        hamlet = self.example_user("hamlet")
+        stream = self.make_stream("existing_stream_6")
+        self.subscribe(hamlet, stream.name)
+        meeting = do_create_meeting(hamlet, "Topic", [(datetime.now(tz=timezone.utc) + timedelta(days=1), None)], datetime.now(tz=timezone.utc) + timedelta(hours=1), [], False, stream)
+        
+        with self.assertRaisesRegex(JsonableError, "Invalid slot ID."):
+            do_confirm_meeting(hamlet, meeting, 999999)
