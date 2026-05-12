@@ -320,6 +320,22 @@ class MeetingModelTest(ZulipTestCase):
         with self.assertRaisesRegex(ValidationError, "The confirmed slot must belong to this meeting."):
             meeting1.clean()
 
+    def test_meeting_clean_valid_slot(self) -> None:
+        from zerver.models.meetings import MeetingSlot
+        hamlet = self.example_user("hamlet")
+        stream = self.make_stream("model_test_stream_2")
+        meeting = Meeting.objects.create(
+            owner=hamlet, topic="M1", stream=stream, deadline=datetime.now(tz=timezone.utc)
+        )
+        
+        # Case 1: confirmed_slot is None (False branch 1)
+        meeting.clean()  # Should not raise
+        
+        # Case 2: confirmed_slot belongs to this meeting (False branch 2)
+        slot = MeetingSlot.objects.create(meeting=meeting, start_time=datetime.now(tz=timezone.utc))
+        meeting.confirmed_slot = slot
+        meeting.clean()  # Should not raise
+
 
 class MeetingActionsCoverageTest(ZulipTestCase):
     def test_do_create_meeting_invalid_invite_user_ids(self) -> None:

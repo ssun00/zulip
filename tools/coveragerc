@@ -23,6 +23,7 @@ exclude_lines =
     @skip
 
 [run]
+branch = True
 data_file=var/.coverage
 
 # dynamic_context=test_function, combined with using
