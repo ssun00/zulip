@@ -125,3 +125,10 @@
     opacity: 0.75;
     overflow-wrap: break-word;
 }
+
+.propose-meeting-status-msg {
+    font-size: 0.9em;
+    font-style: italic;
+    color: var(--color-text-default);
+    opacity: 0.75;
+}

@@ -148,7 +148,12 @@ def do_create_meeting(
 
     if create_channel:
         # All meeting streams live in a shared "meetings" folder for discoverability.
-        folder, _ = ChannelFolder.objects.get_or_create(realm=realm, name="meetings")
+        folder, created = ChannelFolder.objects.get_or_create(realm=realm, name="meetings")
+
+        #send event if folder was just created so frontend knows about it
+        if created:
+            from zerver.lib.channel_folder_actions import send_channel_folder_creation_event
+            send_channel_folder_creation_event(folder, realm)
         stream_name = f"meeting: {topic}"
         stream, _created = create_stream_if_needed(
             realm,
@@ -230,9 +235,12 @@ def get_ranked_slots(meeting: Meeting) -> list[dict[str, object]]:
     return [
         {
             "slot_id": slot.id,
-            "start_time": slot.start_time.isoformat(),
-            "end_time": slot.end_time.isoformat() if slot.end_time else None,
+            "start_time": slot.start_time.astimezone().strftime("%Y-%m-%dT%H:%M"),
+            "end_time": slot.end_time.astimezone().strftime("%Y-%m-%dT%H:%M") if slot.end_time else None,
             "available_count": slot.available_count,
+            "available_user_ids": list(
+                slot.responses.filter(available=True).values_list("user_id", flat=True)
+            ),
         }
         for slot in slots
     ]

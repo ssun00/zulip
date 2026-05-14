@@ -244,7 +244,11 @@ export function sort_groups(
                 // since the user wants chose to put them in the pinned section.
                 pinned_section.default_visible_streams.push(stream_id);
             }
-        } else if (user_settings.web_left_sidebar_show_channel_folders && sub.folder_id) {
+        } else if (
+            user_settings.web_left_sidebar_show_channel_folders &&
+            sub.folder_id &&
+            channel_folders.is_valid_folder_id(sub.folder_id)
+        ) {
             const folder = channel_folders.get_channel_folder_by_id(sub.folder_id);
             let section = folder_sections.get(sub.folder_id);
             if (!section) {

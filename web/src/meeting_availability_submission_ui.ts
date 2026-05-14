@@ -9,12 +9,15 @@ import {
   type AvailabilityEvent,
 } from "./meeting_availability_data.ts";
 import * as modals from "./modals.ts";
+import * as channel from "./channel.ts";
 
 let current_availability_data: MeetingAvailabilityData | undefined;
 let current_callback: ((event: AvailabilityEvent) => void) | undefined;
 let selected_slots: Set<string> = new Set();
 let is_dragging = false;
 let drag_selecting = true; // true = selecting, false = deselecting
+// Maps datetime string (e.g. "2026-04-24T09:00") -> backend slot_id
+let slot_id_map = new Map<string, number>();
 
 function render_grid(): void {
   if (!current_availability_data) {
@@ -125,9 +128,12 @@ function bind_grid_events(): void {
     }
   });
 
-  $(document).on("mouseup.availability-grid", () => {
-    is_dragging = false;
-  });
+  //stop dragging on mouseup
+  $(document)
+    .off("mouseup.availability-grid")
+    .on("mouseup.availability-grid", () => {
+      is_dragging = false;
+    });
 }
 
 function toggle_slot(slot: string): void {
@@ -142,37 +148,109 @@ function toggle_slot(slot: string): void {
   );
 }
 
-function submit_availability(): void {
-  if (!current_availability_data || !current_callback) {
+function submit_availability(
+  meeting_id: number,
+  callback: (event: AvailabilityEvent) => void,
+): void {
+  if (!current_availability_data) {
     return;
+  }
+
+  // Build {slot_id: bool} for every slot — true if selected, false if not
+  const all_slots = current_availability_data.get_all_slots();
+  const slot_responses: Record<number, boolean> = {};
+  for (const slot_key of all_slots) {
+    const slot_id = slot_id_map.get(slot_key);
+    if (slot_id !== undefined) {
+      slot_responses[slot_id] = selected_slots.has(slot_key);
+    }
   }
   const event = current_availability_data.availability_event([
     ...selected_slots,
   ]);
-  current_availability_data.handle_availability_event(
-    current_availability_data.me,
-    event,
-  );
-  current_callback(event);
-  modals.close_active();
+
+  void channel.patch({
+    url: `/json/meetings/${meeting_id}/responses`,
+    data: {slot_responses: JSON.stringify(slot_responses)},
+    success() {
+      current_availability_data!.handle_availability_event(
+        current_availability_data!.me,
+        event,
+      );
+      callback(event);
+      modals.close_active();
+    },
+  });
 }
 
 export function open_availability_modal(
+  meeting_id: number, //Add meeting_id as a parameter
   availability_data: MeetingAvailabilityData,
   callback: (event: AvailabilityEvent) => void,
 ): void {
   current_availability_data = availability_data;
   current_callback = callback;
-  // Pre-populate with user's previous selections if any
-  selected_slots = new Set(availability_data.get_my_selected_slots());
+  slot_id_map = new Map();
+  selected_slots = new Set();
 
+  // Fetch slots + existing responses from backend
+  void channel.get({
+    url: `/json/meetings/${meeting_id}/responses`,
+    success(data) {
+      const result = data as {
+        slots: {
+          slot_id: number;
+          start_time: string;
+          response_count: number;
+          available_user_ids: number[];
+        }[];
+        responses: Record<string, {available_slots: string[]}>;
+      };
+
+      // Build slot_id_map: "2026-04-24T09:00" -> slot_id
+      for (const slot of result.slots) {
+        // Backend stores naive local time but isoformat() adds +00:00; strip to match grid keys
+        const local_key = slot.start_time.slice(0, 16).replace(" ", "T");
+        slot_id_map.set(local_key, slot.slot_id);
+
+        //Populate availability_data with existing responses
+        for (const user_id of slot.available_user_ids) {
+          const existing =
+            availability_data.responses.get(user_id) ?? new Set<string>();
+          existing.add(local_key);
+          availability_data.responses.set(user_id, existing);
+        }
+      }
+
+      // Pre-populate current user's prior selections
+      selected_slots = new Set(
+        availability_data.responses?.get(availability_data.me) ?? [],
+      );
+      console.log("slot_id_map keys:", [...slot_id_map.keys()]);
+      console.log("selected_slots:", [...selected_slots]);
+      console.log("grid all_slots:", current_availability_data.get_all_slots());
+      launch_modal(meeting_id, callback);
+    },
+    error() {
+      //Open anyway so user isn't blocked
+      launch_modal(meeting_id, callback);
+    },
+  });
+}
+
+function launch_modal(
+  meeting_id: number,
+  callback: (event: AvailabilityEvent) => void,
+): void {
   dialog_widget.launch({
     modal_title_html: $t_html({defaultMessage: "Select Your Availability"}),
     modal_content_html: render_availability_submission_modal({}),
     modal_submit_button_text: $t({defaultMessage: "Submit"}),
     id: "availability-submission-modal",
     form_id: "availability-submission-form",
-    on_click: submit_availability,
+    on_click() {
+      submit_availability(meeting_id, callback);
+    },
     on_shown() {
       // Show timezone
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
