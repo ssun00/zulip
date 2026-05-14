@@ -19,6 +19,83 @@ let drag_selecting = true; // true = selecting, false = deselecting
 // Maps datetime string (e.g. "2026-04-24T09:00") -> backend slot_id
 let slot_id_map = new Map<string, number>();
 
+function get_saved_selected_slots(): Set<string> {
+  return current_availability_data?.get_my_selected_slots() ?? new Set();
+}
+
+function get_display_total_respondents(): number {
+  if (!current_availability_data) {
+    return 0;
+  }
+
+  const base_total = current_availability_data.get_total_respondents();
+  const has_saved_response = current_availability_data.responses.has(
+    current_availability_data.me,
+  );
+
+  if (has_saved_response) {
+    return base_total;
+  }
+
+  return selected_slots.size > 0 ? base_total + 1 : base_total;
+}
+
+function get_display_slot_count(slot_key: string): number {
+  if (!current_availability_data) {
+    return 0;
+  }
+
+  let count = current_availability_data.get_slot_count(slot_key);
+  const saved_selected_slots = get_saved_selected_slots();
+  const was_selected = saved_selected_slots.has(slot_key);
+  const is_selected = selected_slots.has(slot_key);
+
+  if (is_selected && !was_selected) {
+    count += 1;
+  } else if (!is_selected && was_selected) {
+    count -= 1;
+  }
+
+  return Math.max(count, 0);
+}
+
+function get_intensity_level(slot_key: string): number {
+  const total_respondents = get_display_total_respondents();
+  const count = get_display_slot_count(slot_key);
+
+  if (total_respondents <= 0) {
+    return 0;
+  }
+
+  return Math.round((count / total_respondents) * 4);
+}
+
+function update_cell_visual($cell: JQuery, slot_key: string): void {
+  const count = get_display_slot_count(slot_key);
+  const intensity = get_intensity_level(slot_key);
+  const is_selected = selected_slots.has(slot_key);
+
+  for (let level = 0; level <= 4; level++) {
+    $cell.removeClass(`availability-intensity-${level}`);
+  }
+
+  $cell
+    .toggleClass("availability-cell-selected", is_selected)
+    .addClass(`availability-intensity-${intensity}`)
+    .attr(
+      "title",
+      is_selected ? `${count} available, selected by you` : `${count} available`,
+    );
+}
+
+function refresh_grid_visuals(): void {
+  $("#availability-grid .availability-cell").each(function () {
+    const $cell = $(this);
+    const slot_key = $cell.data("slot") as string;
+    update_cell_visual($cell, slot_key);
+  });
+}
+
 function render_grid(): void {
   if (!current_availability_data) {
     return;
@@ -27,8 +104,6 @@ function render_grid(): void {
   const widget_data = current_availability_data.get_widget_data();
   const dates = widget_data.dates;
   const all_slots = widget_data.all_slots;
-  const slot_counts = widget_data.slot_counts;
-  const total_respondents = widget_data.total_respondents;
   const slots_per_date = all_slots.length / dates.length;
 
   //Build time labels from first date's slots
@@ -64,15 +139,13 @@ function render_grid(): void {
         .map((_date, col_idx) => {
           const slot_key = all_slots[col_idx * slots_per_date + row_idx]!;
           const is_selected = selected_slots.has(slot_key);
-          const count = slot_counts[slot_key] ?? 0;
-          const intensity =
-            total_respondents > 0
-              ? Math.round((count / total_respondents) * 4)
-              : 0;
+          const count = get_display_slot_count(slot_key);
+          const intensity = get_intensity_level(slot_key);
 
           return `<div
                         class="availability-cell ${is_selected ? "availability-cell-selected" : ""} availability-intensity-${intensity}"
                         data-slot="${slot_key}"
+                        title="${is_selected ? `${count} available, selected by you` : `${count} available`}"
                     ></div>`;
         })
         .join("");
@@ -121,11 +194,10 @@ function bind_grid_events(): void {
     const slot = $(this).data("slot") as string;
     if (drag_selecting) {
       selected_slots.add(slot);
-      $(this).addClass("availability-cell-selected");
     } else {
       selected_slots.delete(slot);
-      $(this).removeClass("availability-cell-selected");
     }
+    refresh_grid_visuals();
   });
 
   //stop dragging on mouseup
@@ -142,10 +214,7 @@ function toggle_slot(slot: string): void {
   } else {
     selected_slots.add(slot);
   }
-  $(`[data-slot="${slot}"]`).toggleClass(
-    "availability-cell-selected",
-    selected_slots.has(slot),
-  );
+  refresh_grid_visuals();
 }
 
 function submit_availability(
@@ -201,11 +270,11 @@ export function open_availability_modal(
         slots: {
           slot_id: number;
           start_time: string;
-          response_count: number;
+          available_count: number;
           available_user_ids: number[];
         }[];
-        responses: Record<string, {available_slots: string[]}>;
       };
+      const responses = new Map<number, Set<string>>();
 
       // Build slot_id_map: "2026-04-24T09:00" -> slot_id
       for (const slot of result.slots) {
@@ -213,22 +282,21 @@ export function open_availability_modal(
         const local_key = slot.start_time.slice(0, 16).replace(" ", "T");
         slot_id_map.set(local_key, slot.slot_id);
 
-        //Populate availability_data with existing responses
+        // Rebuild availability state from the server so editing starts from
+        // the actual saved responses instead of merging with stale local data.
         for (const user_id of slot.available_user_ids) {
-          const existing =
-            availability_data.responses.get(user_id) ?? new Set<string>();
+          const existing = responses.get(user_id) ?? new Set<string>();
           existing.add(local_key);
-          availability_data.responses.set(user_id, existing);
+          responses.set(user_id, existing);
         }
       }
+
+      availability_data.responses = responses;
 
       // Pre-populate current user's prior selections
       selected_slots = new Set(
         availability_data.responses?.get(availability_data.me) ?? [],
       );
-      console.log("slot_id_map keys:", [...slot_id_map.keys()]);
-      console.log("selected_slots:", [...selected_slots]);
-      console.log("grid all_slots:", current_availability_data.get_all_slots());
       launch_modal(meeting_id, callback);
     },
     error() {

@@ -8,7 +8,7 @@
 
         <div class="input-group">
             <label for="propose-meeting-dates" class="modal-field-label">{{t "Meeting Dates" }}</label>
-            <input id="propose-meeting-dates" type="text" class="modal_text_input" placeholder="{{t 'Select days' }}"
+            <input id="propose-meeting-dates" type="text" class="modal_text_input modal-picker-input" placeholder="{{t 'Select days' }}"
                 readonly />
             <input type="hidden" id="propose-meeting-dates-value" name="dates" />
             <p id="propose-dates-times-error" class="rsvp-channel-warning" style="display: none; color: #e74c3c;">
@@ -18,7 +18,7 @@
 
         <div class="input-group">
             <label for="propose-meeting-times" class="modal-field-label">{{t "Meeting Times" }}</label>
-            <input id="propose-meeting-times" type="text" class="modal_text_input" placeholder="{{t 'Select times' }}"
+            <input id="propose-meeting-times" type="text" class="modal_text_input modal-picker-input" placeholder="{{t 'Select times' }}"
                 readonly />
             <input type="hidden" id="propose-meeting-times-value" name="times" />
         </div>
@@ -50,7 +50,7 @@
         <div class="input-group propose-rsvp-by-row">
             <div class="propose-rsvp-by-field">
                 <label for="propose-rsvp-by" class="modal-field-label">{{t "RSVP By:" }}</label>
-                <input id="propose-rsvp-by" type="text" class="modal_text_input"
+                <input id="propose-rsvp-by" type="text" class="modal_text_input modal-picker-input"
                     placeholder="{{t 'Select date and time' }}" readonly />
                 <input type="hidden" id="propose-rsvp-by-value" name="rsvp_by" />
                 <p id="propose-rsvp-error" class="rsvp-channel-warning" style="display: none; color: #e74c3c;">

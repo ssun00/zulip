@@ -873,6 +873,12 @@
   opacity: var(--opacity-readonly-modal-input);
 }
 
+.modal__container .modal_text_input.modal-picker-input:read-only {
+  background-color: var(--color-background-modal);
+  opacity: 1;
+  cursor: pointer;
+}
+
 .modal-textarea {
   width: 100%;
   box-sizing: border-box;

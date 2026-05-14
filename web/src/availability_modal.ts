@@ -3,6 +3,7 @@ import $ from "jquery";
 import * as channel from "./channel.ts";
 import * as dialog_widget from "./dialog_widget.ts";
 import {$t, $t_html} from "./i18n.ts";
+import * as modals from "./modals.ts";
 
 type RankedSlot = {
     slot_id: number;
@@ -55,15 +56,16 @@ export function open(meeting_id: number, on_confirmed?: () => void): void {
         url: `/json/meetings/${meeting_id}/responses`,
         success(data) {
             const slots = (data as {slots: RankedSlot[]}).slots;
-            dialog_widget.launch({
+            const dialog_widget_id = dialog_widget.launch({
                 modal_title_html: $t_html({defaultMessage: "Choose final meeting time"}),
                 modal_content_html: render_slot_picker(slots),
                 modal_submit_button_text: $t({defaultMessage: "Confirm slot"}),
                 id: "meeting-confirm-modal",
                 form_id: "meeting-confirm-form",
                 on_click() {
+                    const $modal = $(`#${CSS.escape(dialog_widget_id)}`);
                     const selected = Number(
-                        $<HTMLInputElement>("input[name='winning_slot_id']:checked").val(),
+                        $modal.find<HTMLInputElement>("input[name='winning_slot_id']:checked").val(),
                     );
                     if (!selected) {
                         return;
@@ -73,10 +75,7 @@ export function open(meeting_id: number, on_confirmed?: () => void): void {
                         url: `/json/meetings/${meeting_id}/confirm`,
                         data: {winning_slot_id: JSON.stringify(selected)},
                         success() {
-                            dialog_widget.close();
-                            if (on_confirmed) {
-                                on_confirmed();
-                            }
+                            modals.close(dialog_widget_id, {on_hidden: on_confirmed});
                         },
                     });
                 },

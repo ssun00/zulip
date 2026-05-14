@@ -17,6 +17,7 @@ import * as browser_history from "./browser_history.ts";
 import * as narrow_state from "./narrow_state.ts";
 import * as peer_data from "./peer_data.ts";
 import * as people from "./people.ts";
+import * as pill_typeahead from "./pill_typeahead.ts";
 import * as timerender from "./timerender.ts";
 import * as user_pill from "./user_pill.ts";
 import * as flatpickr from "./flatpickr.ts";
@@ -451,6 +452,10 @@ function rsvp_meeting_modal_post_render(): void {
     update_rsvp_submit_button_state();
   });
 
+  pill_typeahead.set_up_user($("#rsvp-invite-users"), invite_users_widget, {
+    exclude_bots: true,
+  });
+
   if (typeof document !== "undefined") {
     $(document).on("click.rsvp-dropdown", (e) => {
       const $dropdown = $("#rsvp-user-dropdown");
@@ -466,55 +471,7 @@ function rsvp_meeting_modal_post_render(): void {
   }
 
   $("#rsvp-invite-users").on("input", () => {
-    const query = ($("#rsvp-invite-users").text() ?? "").toLowerCase().trim();
-    const $dropdown = $("#rsvp-user-dropdown");
-
-    if (!query) {
-      $dropdown.hide();
-      return;
-    }
-
-    populate_rsvp_user_dropdown();
-
-    const $options = $dropdown.find(".rsvp-user-option").toArray();
-    const starts_with: HTMLElement[] = [];
-
-    for (const el of $options) {
-      const name = $(el).find(".user-name").text().toLowerCase();
-      const email = $(el).find(".user-email").text().toLowerCase();
-      if (name.startsWith(query) || email.startsWith(query)) {
-        starts_with.push(el);
-      }
-    }
-
-    $dropdown.empty();
-    for (const el of starts_with) {
-      $dropdown.append(el);
-    }
-
-    if (starts_with.length === 0) {
-      $dropdown.hide();
-      return;
-    }
-
-    const containerEl = $("#rsvp-invite-users-container")[0];
-    const dropdownEl = $dropdown[0];
-    if (!containerEl || !dropdownEl) {
-      return;
-    }
-    $dropdown.show();
-    let rect;
-    try {
-      rect = containerEl.getBoundingClientRect();
-    } catch {
-      return;
-    }
-    const dropdownHeight = dropdownEl.offsetHeight;
-    $dropdown.css({
-      top: rect.top - dropdownHeight - 4,
-      left: rect.left,
-      width: rect.width,
-    });
+    $("#rsvp-user-dropdown").hide();
   });
 
   const hide_rsvp_dropdown = (): void => {
@@ -733,6 +690,10 @@ function propose_meeting_modal_post_render(): void {
     update_propose_submit_button_state();
   });
 
+  pill_typeahead.set_up_user($("#propose-invite-users"), invite_users_widget, {
+    exclude_bots: true,
+  });
+
   // close dropdown on outside click
   if (typeof document !== "undefined") {
     $(document).on("click.propose-dropdown", (e) => {
@@ -749,40 +710,7 @@ function propose_meeting_modal_post_render(): void {
   };
 
   $("#propose-invite-users").on("input", () => {
-    const query = ($("#propose-invite-users").text() ?? "").toLowerCase().trim();
-    const $dropdown = $("#propose-user-dropdown");
-
-    if (!query) {
-      $dropdown.hide();
-      return;
-    }
-
-    populate_propose_user_dropdown();
-
-    $dropdown.find(".rsvp-user-option").each(function () {
-      const name = $(this).find(".user-name").text().toLowerCase();
-      const email = $(this).find(".user-email").text().toLowerCase();
-      $(this).toggle(name.includes(query) || email.includes(query));
-    });
-
-    const containerEl = $("#propose-invite-users-container")[0];
-    const dropdownEl = $dropdown[0];
-    if (!containerEl || !dropdownEl) {
-      return;
-    }
-    $dropdown.show();
-    let rect;
-    try {
-      rect = containerEl.getBoundingClientRect();
-    } catch {
-      return;
-    }
-    const dropdownHeight = dropdownEl.offsetHeight;
-    $dropdown.css({
-      top: rect.top - dropdownHeight - 4,
-      left: rect.left,
-      width: rect.width,
-    });
+    $("#propose-user-dropdown").hide();
   });
 
   const hide_propose_dropdown = (): void => {
