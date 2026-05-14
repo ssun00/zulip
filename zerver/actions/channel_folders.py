@@ -12,6 +12,15 @@ from zerver.models.users import active_user_ids
 from zerver.tornado.django_api import send_event_on_commit
 
 
+def send_channel_folder_creation_event(channel_folder: ChannelFolder) -> None:
+    event = dict(
+        type="channel_folder",
+        op="add",
+        channel_folder=asdict(get_channel_folder_data(channel_folder)),
+    )
+    send_event_on_commit(channel_folder.realm, event, active_user_ids(channel_folder.realm_id))
+
+
 @transaction.atomic(durable=True)
 def check_add_channel_folder(
     realm: Realm, name: str, description: str, *, acting_user: UserProfile
@@ -38,12 +47,7 @@ def check_add_channel_folder(
         modified_channel_folder=channel_folder,
     )
 
-    event = dict(
-        type="channel_folder",
-        op="add",
-        channel_folder=asdict(get_channel_folder_data(channel_folder)),
-    )
-    send_event_on_commit(realm, event, active_user_ids(realm.id))
+    send_channel_folder_creation_event(channel_folder)
 
     return channel_folder
 

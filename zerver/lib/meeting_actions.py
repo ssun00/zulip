@@ -20,6 +20,7 @@ from django.conf import settings
 from django.db.models import Count, Q
 from django.utils.translation import gettext as _
 
+from zerver.actions.channel_folders import send_channel_folder_creation_event
 from zerver.actions.message_send import internal_send_private_message, internal_send_stream_message
 from zerver.actions.streams import bulk_add_subscriptions, get_subscriber_ids
 from zerver.lib.exceptions import JsonableError
@@ -150,10 +151,12 @@ def do_create_meeting(
         # All meeting streams live in a shared "meetings" folder for discoverability.
         folder, created = ChannelFolder.objects.get_or_create(realm=realm, name="meetings")
 
-        #send event if folder was just created so frontend knows about it
+        # Notify clients when the shared meetings folder is auto-created.
         if created:
-            from zerver.lib.channel_folder_actions import send_channel_folder_creation_event
-            send_channel_folder_creation_event(folder, realm)
+            folder.order = folder.id
+            folder.creator = owner
+            folder.save(update_fields=["order", "creator"])
+            send_channel_folder_creation_event(folder)
         stream_name = f"meeting: {topic}"
         stream, _created = create_stream_if_needed(
             realm,

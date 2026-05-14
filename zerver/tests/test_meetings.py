@@ -1,18 +1,21 @@
 from datetime import datetime, timedelta, timezone
+from unittest import mock
 
 import time_machine
 
+from zerver.actions.create_realm import do_create_realm
+from zerver.actions.create_user import do_create_user
 from zerver.actions.streams import bulk_add_subscriptions
 from zerver.lib.exceptions import JsonableError
 from zerver.lib.meeting_actions import (
     access_meeting_for_user,
     assert_user_can_submit_meeting_responses,
-    check_meeting_deadlines,
     do_confirm_meeting,
     do_create_meeting,
     do_upsert_responses,
 )
 from zerver.lib.test_classes import ZulipTestCase
+from zerver.models.channel_folders import ChannelFolder
 from zerver.models.meetings import Meeting
 from zerver.models.streams import get_stream
 
@@ -150,6 +153,7 @@ class MeetingsBackendTest(ZulipTestCase):
         self.assertEqual(meeting.status, Meeting.Status.CONFIRMED)
 
     def test_check_meeting_deadlines_marks_overdue(self) -> None:
+        from django.core.management import call_command
         hamlet = self.example_user("hamlet")
         self.login_user(hamlet)
         stream_name = "zulip_meetings_deadline"
@@ -170,7 +174,7 @@ class MeetingsBackendTest(ZulipTestCase):
 
         future = deadline + timedelta(days=1)
         with time_machine.travel(future, tick=False):
-            check_meeting_deadlines()
+            call_command("check_meeting_deadlines")
 
         meeting.refresh_from_db()
         self.assertEqual(meeting.status, Meeting.Status.DEADLINE_PASSED)
@@ -275,14 +279,28 @@ class MeetingsViewTest(ZulipTestCase):
         self.login_user(hamlet)
         stream = self.make_stream("responses_view_stream")
         self.subscribe(hamlet, stream.name)
+        # One slot with end_time, one without
         meeting = do_create_meeting(
-            hamlet, "Topic", [(datetime.now(tz=timezone.utc) + timedelta(days=1), None)],
-            datetime.now(tz=timezone.utc) + timedelta(hours=1), [], False, stream
+            hamlet,
+            "Topic",
+            [
+                (
+                    datetime.now(tz=timezone.utc) + timedelta(days=1),
+                    datetime.now(tz=timezone.utc) + timedelta(days=1, hours=1),
+                ),
+                (datetime.now(tz=timezone.utc) + timedelta(days=2), None),
+            ],
+            datetime.now(tz=timezone.utc) + timedelta(hours=1),
+            [],
+            False,
+            stream,
         )
-        
+
         result = self.client_get(f"/json/meetings/{meeting.id}/responses")
         self.assert_json_success(result)
         self.assertIn("slots", result.json())
+        self.assertIsNotNone(result.json()["slots"][0]["end_time"])
+        self.assertIsNone(result.json()["slots"][1]["end_time"])
 
     def test_confirm_meeting_view(self) -> None:
         hamlet = self.example_user("hamlet")
@@ -335,6 +353,12 @@ class MeetingModelTest(ZulipTestCase):
         slot = MeetingSlot.objects.create(meeting=meeting, start_time=datetime.now(tz=timezone.utc))
         meeting.confirmed_slot = slot
         meeting.clean()  # Should not raise
+
+        # Case 3: pk is None (False branch for 'self.pk is not None')
+        unsaved_meeting = Meeting(
+            owner=hamlet, topic="M3", stream=stream, deadline=datetime.now(tz=timezone.utc)
+        )
+        unsaved_meeting.clean()
 
 
 class MeetingActionsCoverageTest(ZulipTestCase):
@@ -438,3 +462,69 @@ class MeetingActionsCoverageTest(ZulipTestCase):
         
         with self.assertRaisesRegex(JsonableError, "Invalid slot ID."):
             do_confirm_meeting(hamlet, meeting, 999999)
+
+    def test_do_create_meeting_folder_creation(self) -> None:
+        # Hits the create_channel path where the shared folder is auto-created.
+        realm = do_create_realm(string_id="new_realm", name="new_realm")
+        new_user = do_create_user(
+            "new_user@new_realm.com",
+            "password",
+            realm,
+            "New User",
+            acting_user=None,
+        )
+
+        deadline = datetime.now(tz=timezone.utc) + timedelta(days=1)
+        with mock.patch("zerver.lib.meeting_actions.send_channel_folder_creation_event") as send_event:
+            meeting = do_create_meeting(
+                new_user,
+                "Folder Test",
+                [(datetime.now(tz=timezone.utc) + timedelta(days=2), None)],
+                deadline,
+                [],
+                True,
+            )
+
+        self.assertEqual(meeting.stream.name, "meeting: Folder Test")
+        folder = ChannelFolder.objects.get(realm=realm, name="meetings")
+        self.assertEqual(meeting.stream.folder_id, folder.id)
+        self.assertEqual(folder.order, folder.id)
+        self.assertEqual(folder.creator_id, new_user.id)
+        send_event.assert_called_once_with(folder)
+
+    def test_do_create_meeting_existing_folder_skips_creation_event(self) -> None:
+        # Hits the False branch of "if created:" for an existing shared folder.
+        realm = do_create_realm(
+            string_id="existing_meeting_folder_realm",
+            name="existing_meeting_folder_realm",
+        )
+        new_user = do_create_user(
+            "existing_folder_user@meetingrealm.com",
+            "password",
+            realm,
+            "Existing Folder User",
+            acting_user=None,
+        )
+        existing_folder = ChannelFolder.objects.create(
+            realm=realm,
+            name="meetings",
+            order=17,
+            creator=new_user,
+        )
+
+        deadline = datetime.now(tz=timezone.utc) + timedelta(days=1)
+        with mock.patch("zerver.lib.meeting_actions.send_channel_folder_creation_event") as send_event:
+            meeting = do_create_meeting(
+                new_user,
+                "Existing Folder Test",
+                [(datetime.now(tz=timezone.utc) + timedelta(days=2), None)],
+                deadline,
+                [],
+                True,
+            )
+
+        existing_folder.refresh_from_db()
+        self.assertEqual(meeting.stream.folder_id, existing_folder.id)
+        self.assertEqual(existing_folder.order, 17)
+        self.assertEqual(existing_folder.creator_id, new_user.id)
+        send_event.assert_not_called()
