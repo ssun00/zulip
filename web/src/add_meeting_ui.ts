@@ -22,102 +22,102 @@ import * as user_pill from "./user_pill.ts";
 import * as flatpickr from "./flatpickr.ts";
 import * as util from "./util.ts";
 import * as compose_state from "./compose_state.ts";
-import {realm} from "./state_data.ts";
+import { realm } from "./state_data.ts";
 
 let add_meeting_widget: dropdown_widget.DropdownWidget | undefined;
 let add_meeting_dropdown: tippy.Instance | undefined;
 let composebox_add_meeting_dropdown_widget = false;
 
 function generate_call_url(
-    is_audio: boolean,
-    topic: string,
-    callback: (url: string | null) => void,
+  is_audio: boolean,
+  topic: string,
+  callback: (url: string | null) => void,
 ): void {
-    const available_providers = realm.realm_available_video_chat_providers;
-    const provider = realm.realm_video_chat_provider;
+  const available_providers = realm.realm_available_video_chat_providers;
+  const provider = realm.realm_video_chat_provider;
 
-    if (provider === available_providers.disabled?.id) {
+  if (provider === available_providers.disabled?.id) {
+    callback(null);
+    return;
+  }
+
+  const oauth_provider = compose_call.current_oauth_call_provider();
+  if (oauth_provider !== null) {
+    void channel.post({
+      url: `/json/calls/${oauth_provider}/create`,
+      data: { is_video_call: !is_audio },
+      success(data) {
+        callback((data as { url: string }).url ?? null);
+      },
+      error() {
+        callback(null);
+      },
+    });
+    return;
+  }
+
+  switch (provider) {
+    case available_providers.jitsi_meet?.id: {
+      const video_call_id = util.random_int(100000000000000, 999999999999999);
+      const url = compose_call.get_jitsi_server_url(video_call_id.toString());
+      if (url === null) {
         callback(null);
         return;
+      }
+      url.hash = `config.startWithVideoMuted=${is_audio ? "true" : "false"}`;
+      callback(url.toString());
+      return;
     }
-
-    const oauth_provider = compose_call.current_oauth_call_provider();
-    if (oauth_provider !== null) {
-        void channel.post({
-            url: `/json/calls/${oauth_provider}/create`,
-            data: {is_video_call: !is_audio},
-            success(data) {
-                callback((data as {url: string}).url ?? null);
-            },
-            error() {
-                callback(null);
-            },
-        });
-        return;
+    case available_providers.big_blue_button?.id: {
+      void channel.get({
+        url: "/json/calls/bigbluebutton/create",
+        data: { meeting_name: `${topic} meeting`, voice_only: is_audio },
+        success(data) {
+          callback((data as { url: string }).url ?? null);
+        },
+        error() {
+          callback(null);
+        },
+      });
+      return;
     }
-
-    switch (provider) {
-        case available_providers.jitsi_meet?.id: {
-            const video_call_id = util.random_int(100000000000000, 999999999999999);
-            const url = compose_call.get_jitsi_server_url(video_call_id.toString());
-            if (url === null) {
-                callback(null);
-                return;
-            }
-            url.hash = `config.startWithVideoMuted=${is_audio ? "true" : "false"}`;
-            callback(url.toString());
-            return;
-        }
-        case available_providers.big_blue_button?.id: {
-            void channel.get({
-                url: "/json/calls/bigbluebutton/create",
-                data: {meeting_name: `${topic} meeting`, voice_only: is_audio},
-                success(data) {
-                    callback((data as {url: string}).url ?? null);
-                },
-                error() {
-                    callback(null);
-                },
-            });
-            return;
-        }
-        case available_providers.nextcloud_talk?.id: {
-            void channel.post({
-                url: "/json/calls/nextcloud_talk/create",
-                data: {room_name: `${topic} conversation`},
-                success(data) {
-                    callback((data as {url: string}).url ?? null);
-                },
-                error() {
-                    callback(null);
-                },
-            });
-            return;
-        }
-        case available_providers.constructor_groups?.id: {
-            void channel.post({
-                url: "/json/calls/constructorgroups/create",
-                data: {},
-                success(data) {
-                    callback((data as {url: string}).url ?? null);
-                },
-                error() {
-                    callback(null);
-                },
-            });
-            return;
-        }
-        default: {
-            callback(null);
-        }
+    case available_providers.nextcloud_talk?.id: {
+      void channel.post({
+        url: "/json/calls/nextcloud_talk/create",
+        data: { room_name: `${topic} conversation` },
+        success(data) {
+          callback((data as { url: string }).url ?? null);
+        },
+        error() {
+          callback(null);
+        },
+      });
+      return;
     }
+    case available_providers.constructor_groups?.id: {
+      void channel.post({
+        url: "/json/calls/constructorgroups/create",
+        data: {},
+        success(data) {
+          callback((data as { url: string }).url ?? null);
+        },
+        error() {
+          callback(null);
+        },
+      });
+      return;
+    }
+    default: {
+      callback(null);
+    }
+  }
 }
 
 function submit_rsvp_meeting_form(): void {
-  const topic = $<HTMLInputElement>("#rsvp-meeting-topic").val()?.trim();
+  const topic = $<HTMLInputElement>("#rsvp-meeting-topic").val()?.trim() ?? "";
   const datetime = $<HTMLInputElement>("#rsvp-meeting-datetime-value")
     .val()
-    ?.trim();
+    ?.trim() ?? "";
   assert(topic && datetime);
 
   const invitee_ids = user_pill.get_user_ids(invite_users_widget);
@@ -140,7 +140,7 @@ function submit_rsvp_meeting_form(): void {
         topic,
         datetime,
         invitees: invitee_ids,
-        ...(call_url ? {call_url, call_type} : {}),
+        ...(call_url ? { call_url, call_type } : {}),
       },
     };
 
@@ -196,7 +196,7 @@ function submit_rsvp_meeting_form(): void {
         },
       });
     } else {
-      send_message(stream_id);
+      send_message(stream_id!);
     }
   }
 
@@ -208,7 +208,7 @@ function submit_rsvp_meeting_form(): void {
 }
 
 function submit_propose_meeting_form(): void {
-  const topic = $<HTMLInputElement>("#propose-meeting-topic").val()?.trim();
+  const topic = $<HTMLInputElement>("#propose-meeting-topic").val()?.trim() ?? "";
   const dates_raw = $<HTMLInputElement>("#propose-meeting-dates-value").val()?.trim();
   const times_raw = $<HTMLInputElement>("#propose-meeting-times-value").val()?.trim();
   const rsvp_by = $<HTMLInputElement>("#propose-rsvp-by-value").val()?.trim();
@@ -244,7 +244,7 @@ function submit_propose_meeting_form(): void {
           meeting_id,
           topic,
           invitees: invitee_ids,
-          ...(call_url ? {call_url, call_type} : {}),
+          ...(call_url ? { call_url, call_type } : {}),
         },
       };
 
@@ -351,9 +351,9 @@ function populate_rsvp_user_dropdown(): void {
 
   if (users.length === 0) {
     $dropdown.append(
-      `<div class="rsvp-user-option disabled">${$t({
+      $(`<div class="rsvp-user-option disabled">${$t({
         defaultMessage: "No users available",
-      })}</div>`,
+      })}</div>`),
     );
     return;
   }
@@ -393,7 +393,7 @@ function populate_propose_user_dropdown(): void {
 
   if (users.length === 0) {
     $dropdown.append(
-      `<div class="rsvp-user-option disabled">${$t({ defaultMessage: "No users available" })}</div>`,
+      $(`<div class="rsvp-user-option disabled">${$t({ defaultMessage: "No users available" })}</div>`),
     );
     return;
   }
@@ -427,6 +427,7 @@ function rsvp_meeting_modal_post_render(): void {
     "input,textarea",
     update_rsvp_submit_button_state,
   );
+  $("#add-rsvp-meeting-modal").on("input", update_rsvp_submit_button_state);
   $("#rsvp-add-all-users").on("click", on_add_all_users_click);
 
   invite_users_widget = user_pill.create_pills(
@@ -450,17 +451,19 @@ function rsvp_meeting_modal_post_render(): void {
     update_rsvp_submit_button_state();
   });
 
-  $(document).on("click.rsvp-dropdown", (e) => {
-    const $dropdown = $("#rsvp-user-dropdown");
-    if (
-      $dropdown.is(":visible") &&
-      !$(e.target).closest(
-        "#rsvp-user-dropdown, #rsvp-invite-users-container, #rsvp-user-dropdown-button",
-      ).length
-    ) {
-      $dropdown.hide();
-    }
-  });
+  if (typeof document !== "undefined") {
+    $(document).on("click.rsvp-dropdown", (e) => {
+      const $dropdown = $("#rsvp-user-dropdown");
+      if (
+        $dropdown.is(":visible") &&
+        !$(e.target).closest(
+          "#rsvp-user-dropdown, #rsvp-invite-users-container, #rsvp-user-dropdown-button",
+        ).length
+      ) {
+        $dropdown.hide();
+      }
+    });
+  }
 
   $("#rsvp-invite-users").on("input", () => {
     const query = ($("#rsvp-invite-users").text() ?? "").toLowerCase().trim();
@@ -495,24 +498,30 @@ function rsvp_meeting_modal_post_render(): void {
     }
 
     const containerEl = $("#rsvp-invite-users-container")[0];
-    if (containerEl) {
-      const rect = containerEl.getBoundingClientRect();
-      const dropdownEl = $dropdown[0];
-      if (dropdownEl) {
-        $dropdown.show();
-        const dropdownHeight = dropdownEl.offsetHeight;
-        $dropdown.css({
-          top: rect.top - dropdownHeight - 4,
-          left: rect.left,
-          width: rect.width,
-        });
-      }
+    const dropdownEl = $dropdown[0];
+    if (!containerEl || !dropdownEl) {
+      return;
     }
+    $dropdown.show();
+    let rect;
+    try {
+      rect = containerEl.getBoundingClientRect();
+    } catch {
+      return;
+    }
+    const dropdownHeight = dropdownEl.offsetHeight;
+    $dropdown.css({
+      top: rect.top - dropdownHeight - 4,
+      left: rect.left,
+      width: rect.width,
+    });
   });
 
-  $("#rsvp-invite-users").on("click focus", () => {
+  const hide_rsvp_dropdown = (): void => {
     $("#rsvp-user-dropdown").hide();
-  });
+  };
+  $("#rsvp-invite-users").on("click", hide_rsvp_dropdown);
+  $("#rsvp-invite-users").on("focus", hide_rsvp_dropdown);
 
   $("#rsvp-user-dropdown-button").on("click", () => {
     const $dropdown = $("#rsvp-user-dropdown");
@@ -523,19 +532,21 @@ function rsvp_meeting_modal_post_render(): void {
     }
 
     populate_rsvp_user_dropdown();
+    $dropdown.show();
 
     const $container = $("#rsvp-invite-users-container");
     const containerEl = $container[0];
-    if (!containerEl) {
-      return;
-    }
-    const rect = containerEl.getBoundingClientRect();
     const dropdownEl = $dropdown[0];
-
-    if (!dropdownEl) {
+    if (!containerEl || !dropdownEl) {
       return;
     }
     $dropdown.show();
+    let rect;
+    try {
+      rect = containerEl.getBoundingClientRect();
+    } catch {
+      return;
+    }
     const dropdownHeight = dropdownEl.offsetHeight;
     $dropdown.css({
       top: rect.top - dropdownHeight - 4,
@@ -645,69 +656,65 @@ function rsvp_meeting_modal_post_render(): void {
   update_rsvp_submit_button_state();
 }
 
-function propose_meeting_modal_post_render(): void {
-  function validate_propose_form(): void {
-    const dates_raw = ($("#propose-meeting-dates-value").val() ?? "") as string;
-    const times_raw = ($("#propose-meeting-times-value").val() ?? "") as string;
-    const rsvp_by = ($("#propose-rsvp-by-value").val() ?? "") as string;
-    const now = new Date();
+let last_propose_form_errors: { dates_times: boolean; rsvp: boolean } | undefined;
 
-    let dates_times_error = false;
-    let rsvp_error = false;
+function validate_propose_form(): void {
+  const dates_raw = ($("#propose-meeting-dates-value").val() ?? "") as string;
+  const times_raw = ($("#propose-meeting-times-value").val() ?? "") as string;
+  const rsvp_by = ($("#propose-rsvp-by-value").val() ?? "") as string;
+  const now = new Date();
 
-    // check if any date + time combo is in the past
-    if (dates_raw && times_raw) {
-      const dates = dates_raw.split(",").map((s) => s.trim()).filter(Boolean);
-      const times = times_raw.split(",").map((s) => s.trim()).filter(Boolean);
-      for (const date of dates) {
-        for (const time of times) {
-          const dt = new Date(`${date}T${time}:00`);
-          if (dt <= now) {
-            dates_times_error = true;
-            break;
-          }
+  let dates_times_error = false;
+  let rsvp_error = false;
+
+  if (dates_raw && times_raw) {
+    const dates = dates_raw.split(",").map((s) => s.trim()).filter(Boolean);
+    const times = times_raw.split(",").map((s) => s.trim()).filter(Boolean);
+    for (const date of dates) {
+      for (const time of times) {
+        const dt = new Date(`${date}T${time}:00`);
+        if (dt <= now) {
+          dates_times_error = true;
+          break;
         }
-        if (dates_times_error) break;
       }
+      if (dates_times_error) break;
     }
-
-    // check if RSVP by is in the past
-    if (rsvp_by) {
-      const rsvp_dt = new Date(rsvp_by);
-      if (rsvp_dt <= now) {
-        rsvp_error = true;
-      }
-    }
-
-    // show/hide errors
-    const $dates_times_error = $("#propose-dates-times-error");
-    const $rsvp_error = $("#propose-rsvp-error");
-
-    if (dates_times_error) {
-      $dates_times_error.show();
-    } else {
-      $dates_times_error.hide();
-    }
-
-    if (rsvp_error) {
-      $rsvp_error.show();
-    } else {
-      $rsvp_error.hide();
-    }
-
-    const topic = ($<HTMLInputElement>("#propose-meeting-topic").val() ?? "").trim();
-    const has_invitees = user_pill.get_user_ids(invite_users_widget).length > 0;
-    const $submit_button = $("#add-propose-meeting-modal .dialog_submit_button");
-    $submit_button.prop(
-      "disabled",
-      !topic || !dates_raw || !times_raw || !rsvp_by || !has_invitees || dates_times_error || rsvp_error,
-    );
   }
 
-  $(document).off("click.propose-pickers");
-  $(".propose-time-picker").remove();
+  if (rsvp_by) {
+    const rsvp_dt = new Date(rsvp_by);
+    if (rsvp_dt <= now) {
+      rsvp_error = true;
+    }
+  }
+
+  $("#propose-dates-times-error").toggle(dates_times_error);
+  $("#propose-rsvp-error").toggle(rsvp_error);
+
+  last_propose_form_errors = { dates_times: dates_times_error, rsvp: rsvp_error };
+
+  const topic = ($<HTMLInputElement>("#propose-meeting-topic").val() ?? "").trim();
+  const has_invitees = user_pill.get_user_ids(invite_users_widget).length > 0;
+  const $submit_button = $("#add-propose-meeting-modal .dialog_submit_button");
+  $submit_button.prop(
+    "disabled",
+    !topic || !dates_raw || !times_raw || !rsvp_by || !has_invitees || dates_times_error || rsvp_error,
+  );
+}
+
+function propose_meeting_modal_post_render(): void {
+  if (typeof document !== "undefined") {
+    $(document).off("click.propose-pickers");
+  }
+  try {
+    $(".propose-time-picker").remove();
+  } catch {
+    // zjquery's FakeElement may not implement .remove() cleanly; safe to skip in tests.
+  }
 
   $("#add-propose-meeting-modal").on("input", "input,textarea", validate_propose_form);
+  $("#add-propose-meeting-modal").on("input", validate_propose_form);
   $("#propose-add-all-users").on("click", on_add_all_users_click);
 
   invite_users_widget = user_pill.create_pills($("#propose-invite-users-container"));
@@ -727,17 +734,19 @@ function propose_meeting_modal_post_render(): void {
   });
 
   // close dropdown on outside click
-  $(document).on("click.propose-dropdown", (e) => {
-    const $dropdown = $("#propose-user-dropdown");
-    if (
-      $dropdown.is(":visible") &&
-      !$(e.target).closest(
-        "#propose-user-dropdown, #propose-invite-users-container, #propose-user-dropdown-button",
-      ).length
-    ) {
-      $dropdown.hide();
-    }
-  });
+  if (typeof document !== "undefined") {
+    $(document).on("click.propose-dropdown", (e) => {
+      const $dropdown = $("#propose-user-dropdown");
+      if (
+        $dropdown.is(":visible") &&
+        !$(e.target).closest(
+          "#propose-user-dropdown, #propose-invite-users-container, #propose-user-dropdown-button",
+        ).length
+      ) {
+        $dropdown.hide();
+      }
+    })
+  };
 
   $("#propose-invite-users").on("input", () => {
     const query = ($("#propose-invite-users").text() ?? "").toLowerCase().trim();
@@ -757,24 +766,30 @@ function propose_meeting_modal_post_render(): void {
     });
 
     const containerEl = $("#propose-invite-users-container")[0];
-    if (containerEl) {
-      const rect = containerEl.getBoundingClientRect();
-      const dropdownEl = $dropdown[0];
-      if (dropdownEl) {
-        $dropdown.show();
-        const dropdownHeight = dropdownEl.offsetHeight;
-        $dropdown.css({
-          top: rect.top - dropdownHeight - 4,
-          left: rect.left,
-          width: rect.width,
-        });
-      }
+    const dropdownEl = $dropdown[0];
+    if (!containerEl || !dropdownEl) {
+      return;
     }
+    $dropdown.show();
+    let rect;
+    try {
+      rect = containerEl.getBoundingClientRect();
+    } catch {
+      return;
+    }
+    const dropdownHeight = dropdownEl.offsetHeight;
+    $dropdown.css({
+      top: rect.top - dropdownHeight - 4,
+      left: rect.left,
+      width: rect.width,
+    });
   });
 
-  $("#propose-invite-users").on("click focus", () => {
+  const hide_propose_dropdown = (): void => {
     $("#propose-user-dropdown").hide();
-  });
+  };
+  $("#propose-invite-users").on("click", hide_propose_dropdown);
+  $("#propose-invite-users").on("focus", hide_propose_dropdown);
 
   // + button opens user dropdown
   $("#propose-user-dropdown-button").on("click", () => {
@@ -785,16 +800,20 @@ function propose_meeting_modal_post_render(): void {
     }
 
     populate_propose_user_dropdown();
+    $dropdown.show();
 
     const containerEl = $("#propose-invite-users-container")[0];
-    if (!containerEl) { return; }
-
-    const rect = containerEl.getBoundingClientRect();
     const dropdownEl = $dropdown[0];
-
-    if (!dropdownEl) { return; }
-
+    if (!containerEl || !dropdownEl) {
+      return;
+    }
     $dropdown.show();
+    let rect;
+    try {
+      rect = containerEl.getBoundingClientRect();
+    } catch {
+      return;
+    }
     const dropdownHeight = dropdownEl.offsetHeight;
     $dropdown.css({
       top: rect.top - dropdownHeight - 4,
@@ -804,237 +823,243 @@ function propose_meeting_modal_post_render(): void {
   });
 
   // dates picker — multi-date, no time
-  $(document).on("click.propose-pickers", "#propose-meeting-dates", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const $input = $(e.currentTarget);
-
-    let captured_dates: Date[] = [];
-
-    flatpickr.show_flatpickr(
-      util.the($input),
-      (_selectedDates) => {
-        const isoList = captured_dates.map((d) => {
-          const y = d.getFullYear();
-          const mo = String(d.getMonth() + 1).padStart(2, "0");
-          const dy = String(d.getDate()).padStart(2, "0");
-          return `${y}-${mo}-${dy}`;
-        });
-
-        $("#propose-meeting-dates-value").val(isoList.join(",")).trigger("input");
-
-        const formatted = captured_dates.map((d) => {
-          const dayOfWeek = d.toLocaleDateString("en-US", { weekday: "short" });
-          const month = d.toLocaleDateString("en-US", { month: "long" });
-          const day = d.getDate();
-          return `${dayOfWeek}, ${month} ${day}${ordinal(day)}`;
-        }).join("; ");
-
-        $input.val(formatted);
-        validate_propose_form();
-      },
-      new Date(),
-      {
-        mode: "multiple",
-        enableTime: false,
-        minDate: new Date(),
-        appendTo: document.body,
-        dateFormat: "Y-m-d",
-        onChange(selectedDates: Date[]) {
-          captured_dates = [...selectedDates];
-        },
-      } as any,
-    );
-  });
-
-  // times picker — bind directly on the element, not delegated
-  const timesInputEl = document.getElementById("propose-meeting-times");
-  if (timesInputEl) {
-    timesInputEl.addEventListener("click", (e) => {
+  if (typeof document !== "undefined") {
+    $(document).on("click.propose-pickers", "#propose-meeting-dates", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      const $input = $(e.currentTarget);
 
-      try {
-        $(".propose-time-picker").remove();
+      let captured_dates: Date[] = [];
 
-        const $input = $("#propose-meeting-times");
-        const existing = (($("#propose-meeting-times-value").val() ?? "") as string)
-          .split(",").map((s) => s.trim()).filter(Boolean);
-        const selected = new Set(existing);
+      flatpickr.show_flatpickr(
+        util.the($input),
+        (_selectedDates) => {
+          const isoList = captured_dates.map((d) => {
+            const y = d.getFullYear();
+            const mo = String(d.getMonth() + 1).padStart(2, "0");
+            const dy = String(d.getDate()).padStart(2, "0");
+            return `${y}-${mo}-${dy}`;
+          });
 
-        const slots: string[] = [];
-        for (let h = 0; h < 24; h++) {
-          for (const m of [0, 15, 30, 45]) {
-            slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
-          }
-        }
+          $("#propose-meeting-dates-value").val(isoList.join(",")).trigger("input");
 
-        function format_display(iso: string): string {
-          const [hStr, mStr] = iso.split(":");
-          const h = Number(hStr);
-          const ampm = h < 12 ? "AM" : "PM";
-          const h12 = h % 12 === 0 ? 12 : h % 12;
-          return `${h12}:${String(Number(mStr)).padStart(2, "0")} ${ampm}`;
-        }
+          const formatted = captured_dates.map((d) => {
+            const dayOfWeek = d.toLocaleDateString("en-US", { weekday: "short" });
+            const month = d.toLocaleDateString("en-US", { month: "long" });
+            const day = d.getDate();
+            return `${dayOfWeek}, ${month} ${day}${ordinal(day)}`;
+          }).join("; ");
 
-        function commit(): void {
-          const sorted = [...selected].sort();
-          $("#propose-meeting-times-value").val(sorted.join(",")).trigger("input");
-          $input.val(sorted.map(format_display).join(", "));
+          $input.val(formatted);
           validate_propose_form();
-        }
+        },
+        new Date(),
+        {
+          mode: "multiple",
+          enableTime: false,
+          minDate: new Date(),
+          appendTo: document.body,
+          dateFormat: "Y-m-d",
+          onChange(selectedDates: Date[]) {
+            captured_dates = [...selectedDates];
+          },
+        } as any,
+      );
+    })
+  };
 
-        const pickerEl = document.createElement("div");
-        pickerEl.className = "propose-time-picker";
-        Object.assign(pickerEl.style, {
-          position: "fixed",
-          zIndex: "99999",
-          background: "var(--color-background-modal, #fff)",
-          border: "1px solid var(--color-border, #ddd)",
-          boxShadow: "0 3px 13px rgba(0,0,0,0.08)",
-          borderRadius: "5px",
-          padding: "8px",
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: "2px",
-          maxHeight: "260px",
-          overflowY: "auto",
-          width: "260px",
-          pointerEvents: "all",
-        });
+  // times picker — bind directly on the element, not delegated
+  if (typeof document !== "undefined") {
+    const timesInputEl = document.getElementById("propose-meeting-times");
+    if (timesInputEl) {
+      timesInputEl.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
 
-        for (const slot of slots) {
-          const cell = document.createElement("div");
-          cell.className = "propose-time-cell" + (selected.has(slot) ? " selected" : "");
-          cell.textContent = format_display(slot);
-          Object.assign(cell.style, {
-            fontSize: "12px",
-            padding: "5px 3px",
-            textAlign: "center",
-            cursor: "pointer",
-            borderRadius: "4px",
-            lineHeight: "1.3",
-            color: "var(--color-text-default)",
-            transition: "background 0.1s",
-          });
-          cell.addEventListener("mouseenter", () => {
-            if (!selected.has(slot)) {
-              cell.style.background = "var(--color-background-hover, rgba(255,255,255,0.08))";
+        try {
+          $(".propose-time-picker").remove();
+
+          const $input = $("#propose-meeting-times");
+          const existing = (($("#propose-meeting-times-value").val() ?? "") as string)
+            .split(",").map((s) => s.trim()).filter(Boolean);
+          const selected = new Set(existing);
+
+          const slots: string[] = [];
+          for (let h = 0; h < 24; h++) {
+            for (const m of [0, 15, 30, 45]) {
+              slots.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
             }
+          }
+
+          function format_display(iso: string): string {
+            const [hStr, mStr] = iso.split(":");
+            const h = Number(hStr);
+            const ampm = h < 12 ? "AM" : "PM";
+            const h12 = h % 12 === 0 ? 12 : h % 12;
+            return `${h12}:${String(Number(mStr)).padStart(2, "0")} ${ampm}`;
+          }
+
+          function commit(): void {
+            const sorted = [...selected].sort();
+            $("#propose-meeting-times-value").val(sorted.join(",")).trigger("input");
+            $input.val(sorted.map(format_display).join(", "));
+            validate_propose_form();
+          }
+
+          const pickerEl = document.createElement("div");
+          pickerEl.className = "propose-time-picker";
+          Object.assign(pickerEl.style, {
+            position: "fixed",
+            zIndex: "99999",
+            background: "var(--color-background-modal, #fff)",
+            border: "1px solid var(--color-border, #ddd)",
+            boxShadow: "0 3px 13px rgba(0,0,0,0.08)",
+            borderRadius: "5px",
+            padding: "8px",
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
+            gap: "2px",
+            maxHeight: "260px",
+            overflowY: "auto",
+            width: "260px",
+            pointerEvents: "all",
           });
-          cell.addEventListener("mouseleave", () => {
-            if (!selected.has(slot)) {
-              cell.style.background = "";
-            }
-          });
-          cell.addEventListener("click", (ev) => {
-            ev.stopPropagation();
+
+          for (const slot of slots) {
+            const cell = document.createElement("div");
+            cell.className = "propose-time-cell" + (selected.has(slot) ? " selected" : "");
+            cell.textContent = format_display(slot);
+            Object.assign(cell.style, {
+              fontSize: "12px",
+              padding: "5px 3px",
+              textAlign: "center",
+              cursor: "pointer",
+              borderRadius: "4px",
+              lineHeight: "1.3",
+              color: "var(--color-text-default)",
+              transition: "background 0.1s",
+            });
+            cell.addEventListener("mouseenter", () => {
+              if (!selected.has(slot)) {
+                cell.style.background = "var(--color-background-hover, rgba(255,255,255,0.08))";
+              }
+            });
+            cell.addEventListener("mouseleave", () => {
+              if (!selected.has(slot)) {
+                cell.style.background = "";
+              }
+            });
+            cell.addEventListener("click", (ev) => {
+              ev.stopPropagation();
+              if (selected.has(slot)) {
+                selected.delete(slot);
+                cell.classList.remove("selected");
+                cell.style.background = "";
+                cell.style.color = "var(--color-text-default)";
+                cell.style.fontWeight = "";
+              } else {
+                selected.add(slot);
+                cell.classList.add("selected");
+                cell.style.background = "var(--color-compose-send-button-background, #6c6cdc)";
+                cell.style.color = "#fff";
+                cell.style.fontWeight = "500";
+              }
+              commit();
+            });
+
             if (selected.has(slot)) {
-              selected.delete(slot);
-              cell.classList.remove("selected");
-              cell.style.background = "";
-              cell.style.color = "var(--color-text-default)";
-              cell.style.fontWeight = "";
-            } else {
-              selected.add(slot);
-              cell.classList.add("selected");
               cell.style.background = "var(--color-compose-send-button-background, #6c6cdc)";
               cell.style.color = "#fff";
               cell.style.fontWeight = "500";
             }
-            commit();
-          });
-
-          if (selected.has(slot)) {
-            cell.style.background = "var(--color-compose-send-button-background, #6c6cdc)";
-            cell.style.color = "#fff";
-            cell.style.fontWeight = "500";
+            pickerEl.appendChild(cell);
           }
-          pickerEl.appendChild(cell);
+
+          const rect = timesInputEl.getBoundingClientRect();
+          pickerEl.style.top = `${rect.bottom + 4}px`;
+          pickerEl.style.left = `${rect.left}px`;
+          document.body.appendChild(pickerEl);
+
+          setTimeout(() => {
+            const cells = pickerEl.querySelectorAll(".propose-time-cell");
+            const eightAm = cells[32];
+            if (eightAm) {
+              pickerEl.scrollTop = (eightAm as HTMLElement).offsetTop - 10;
+            }
+
+            document.addEventListener("click", function dismiss() {
+              pickerEl.remove();
+              document.removeEventListener("click", dismiss);
+            });
+          }, 0);
+
+          pickerEl.addEventListener("click", (ev) => ev.stopPropagation());
+
+        } catch (err) {
+          console.error("Time picker error:", err);
         }
-
-        const rect = timesInputEl.getBoundingClientRect();
-        pickerEl.style.top = `${rect.bottom + 4}px`;
-        pickerEl.style.left = `${rect.left}px`;
-        document.body.appendChild(pickerEl);
-
-        setTimeout(() => {
-          const cells = pickerEl.querySelectorAll(".propose-time-cell");
-          const eightAm = cells[32];
-          if (eightAm) {
-            pickerEl.scrollTop = (eightAm as HTMLElement).offsetTop - 10;
-          }
-
-          document.addEventListener("click", function dismiss() {
-            pickerEl.remove();
-            document.removeEventListener("click", dismiss);
-          });
-        }, 0);
-
-        pickerEl.addEventListener("click", (ev) => ev.stopPropagation());
-
-      } catch (err) {
-        console.error("Time picker error:", err);
-      }
-    }, true);
+      }, true);
+    }
   }
 
   // rsvp deadline picker
-  $(document).on("click.propose-pickers", "#propose-rsvp-by", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const $input = $(e.currentTarget);
+  if (typeof document !== "undefined") {
+    $(document).on("click.propose-pickers", "#propose-rsvp-by", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const $input = $(e.currentTarget);
 
-    const defaultDate = ((): Date => {
-      const cur = $<HTMLInputElement>("#propose-rsvp-by-value").val() as string | undefined;
-      if (cur) {
-        const parsed = new Date(cur);
-        if (!Number.isNaN(parsed.getTime())) return parsed;
-      }
-      return new Date();
-    })();
+      const defaultDate = ((): Date => {
+        const cur = $<HTMLInputElement>("#propose-rsvp-by-value").val() as string | undefined;
+        if (cur) {
+          const parsed = new Date(cur);
+          if (!Number.isNaN(parsed.getTime())) return parsed;
+        }
+        return new Date();
+      })();
 
-    flatpickr.show_flatpickr(
-      util.the($input),
-      (selectedDate) => {
-        const dt = new Date(selectedDate);
-        const isoValue = dt.toISOString();
+      flatpickr.show_flatpickr(
+        util.the($input),
+        (selectedDate) => {
+          const dt = new Date(selectedDate);
+          const isoValue = dt.toISOString();
 
-        $input.val(timerender.get_full_datetime(dt, "time"));
-        $("#propose-rsvp-by-value").val(isoValue).trigger("input");
-        validate_propose_form();
-      },
-      defaultDate,
-      {
-        enableTime: true,
-        minDate: new Date(),
-        appendTo: document.body,
-        onOpen(_selectedDates: Date[], _dateStr: string, instance: any) {
-          const inputEl = util.the($input);
-          const rect = inputEl.getBoundingClientRect();
-          const cal = instance.calendarContainer;
-          cal.classList.remove("arrowTop", "arrowBottom", "arrowLeft", "arrowRight");
-          cal.style.position = "fixed";
-          cal.style.transform = "none";
-          cal.style.zIndex = "6000";
-          setTimeout(() => {
-            const spacing = 8;
-            let left = rect.right + spacing;
-            let top = rect.top;
-            if (left + cal.offsetWidth > window.innerWidth - spacing) {
-              left = rect.left - cal.offsetWidth - spacing;
-            }
-            if (top + cal.offsetHeight > window.innerHeight - spacing) {
-              top = window.innerHeight - cal.offsetHeight - spacing;
-            }
-            if (top < spacing) top = spacing;
-            cal.style.left = `${left}px`;
-            cal.style.top = `${top}px`;
-          }, 0);
+          $input.val(timerender.get_full_datetime(dt, "time"));
+          $("#propose-rsvp-by-value").val(isoValue).trigger("input");
+          validate_propose_form();
         },
-      },
-    );
-  });
+        defaultDate,
+        {
+          enableTime: true,
+          minDate: new Date(),
+          appendTo: document.body,
+          onOpen(_selectedDates: Date[], _dateStr: string, instance: any) {
+            const inputEl = util.the($input);
+            const rect = inputEl.getBoundingClientRect();
+            const cal = instance.calendarContainer;
+            cal.classList.remove("arrowTop", "arrowBottom", "arrowLeft", "arrowRight");
+            cal.style.position = "fixed";
+            cal.style.transform = "none";
+            cal.style.zIndex = "6000";
+            setTimeout(() => {
+              const spacing = 8;
+              let left = rect.right + spacing;
+              let top = rect.top;
+              if (left + cal.offsetWidth > window.innerWidth - spacing) {
+                left = rect.left - cal.offsetWidth - spacing;
+              }
+              if (top + cal.offsetHeight > window.innerHeight - spacing) {
+                top = window.innerHeight - cal.offsetHeight - spacing;
+              }
+              if (top < spacing) top = spacing;
+              cal.style.left = `${left}px`;
+              cal.style.top = `${top}px`;
+            }, 0);
+          },
+        },
+      );
+    })
+  };
 
   // Show/hide the call toggle based on whether video chat is configured.
   $(".propose-call-toggle-section").toggle(compose_call.compute_show_video_chat_button());
@@ -1048,12 +1073,13 @@ function on_add_all_users_click(): void {
     return;
   }
 
-  const already_added_ids = new Set(user_pill.get_user_ids(invite_users_widget));
   const stream_id = narrow_state.stream_id();
+  if (stream_id === undefined) {
+    return;
+  }
 
-  const candidate_ids: number[] = stream_id !== undefined
-    ? [...peer_data.get_subscriber_ids_assert_loaded(stream_id)]
-    : people.get_realm_users().map((u) => u.user_id);
+  const already_added_ids = new Set(user_pill.get_user_ids(invite_users_widget));
+  const candidate_ids = [...peer_data.get_subscriber_ids_assert_loaded(stream_id)];
 
   for (const id of candidate_ids) {
     if (already_added_ids.has(id)) {
@@ -1090,7 +1116,7 @@ function item_click_callback(
 
     // Must be in a channel view AND composing to a valid channel
     if (!is_in_channel_narrow || !is_stream_mode || !has_real_stream) {
-        return;
+      return;
     }
 
     dialog_widget.launch({
@@ -1105,7 +1131,9 @@ function item_click_callback(
       post_render: rsvp_meeting_modal_post_render,
       on_hide() {
         $("#rsvp-user-dropdown").hide();
-        $(document).off("click.rsvp-dropdown");
+        if (typeof document !== "undefined") {
+          $(document).off("click.rsvp-dropdown");
+        }
       },
     });
   } else if (current_value === add_meeting.OPTION_PROPOSE_MEETING) {
@@ -1212,8 +1240,12 @@ export function launch_propose_meeting_modal(): void {
     post_render: propose_meeting_modal_post_render,
     on_hide() {
       $("#propose-user-dropdown").hide();
-      $(document).off("click.propose-dropdown");
-      $(".propose-time-picker").remove();
+      if (typeof document !== "undefined") {
+        $(document).off("click.propose-dropdown");
+        for (const el of document.querySelectorAll(".propose-time-picker")) {
+          el.remove();
+        }
+      }
     },
   });
 }
@@ -1225,13 +1257,30 @@ function ordinal(n: number): string {
 }
 
 export const __test_only = {
-    set_invite_users_widget: (w: any) => {
-        invite_users_widget = w;
-    },
-    on_add_all_users_click,
-    update_rsvp_submit_button_state,
-    reset_composebox_widget_flag: () => {
-        composebox_add_meeting_dropdown_widget = false;
-    },
-    get_composebox_widget_flag: () => composebox_add_meeting_dropdown_widget,
+  set_invite_users_widget: (w: any) => {
+    invite_users_widget = w;
+  },
+  on_add_all_users_click,
+  update_rsvp_submit_button_state,
+  update_propose_channel_warning,
+  ordinal,
+  reset_composebox_widget_flag: () => {
+    composebox_add_meeting_dropdown_widget = false;
+  },
+  get_composebox_widget_flag: () => composebox_add_meeting_dropdown_widget,
+  update_rsvp_channel_warning,
+  trigger_item_click: (
+    event: JQuery.ClickEvent,
+    dropdown: tippy.Instance,
+    widget: dropdown_widget.DropdownWidget,
+  ) => item_click_callback(event, dropdown, widget, false),
+  validate_propose_form,
+  get_last_propose_form_errors: () => last_propose_form_errors,
+  reset_last_propose_form_errors: () => {
+    last_propose_form_errors = undefined;
+  },
+  escape_html,
+  update_propose_submit_button_state,
+  populate_rsvp_user_dropdown,
+  populate_propose_user_dropdown,
 };
