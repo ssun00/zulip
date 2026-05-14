@@ -16,6 +16,7 @@ Flow summary:
 
 from datetime import datetime, timezone
 
+from django.conf import settings
 from django.db.models import Count, Q
 from django.utils.translation import gettext as _
 
@@ -32,6 +33,7 @@ from zerver.models import Stream, UserProfile
 from zerver.models.channel_folders import ChannelFolder
 from zerver.models.meetings import Meeting, MeetingResponse, MeetingSlot
 from zerver.models.realms import Realm
+from zerver.models.users import get_system_bot
 
 
 # ---------------------------------------------------------------------------
@@ -146,7 +148,12 @@ def do_create_meeting(
 
     if create_channel:
         # All meeting streams live in a shared "meetings" folder for discoverability.
-        folder, _ = ChannelFolder.objects.get_or_create(realm=realm, name="meetings")
+        folder, created = ChannelFolder.objects.get_or_create(realm=realm, name="meetings")
+
+        #send event if folder was just created so frontend knows about it
+        if created:
+            from zerver.lib.channel_folder_actions import send_channel_folder_creation_event
+            send_channel_folder_creation_event(folder, realm)
         stream_name = f"meeting: {topic}"
         stream, _created = create_stream_if_needed(
             realm,
@@ -175,18 +182,18 @@ def do_create_meeting(
         MeetingSlot(meeting=meeting, start_time=start, end_time=end) for start, end in slots
     )
 
-    slot_lines = "\n".join(
-        f"- {slot.start_time.strftime('%Y-%m-%d %H:%M UTC')}"
-        + (f" – {slot.end_time.strftime('%H:%M UTC')}" if slot.end_time else "")
-        for slot in meeting.slots.all()
-    )
-    content = (
-        f"**Meeting proposed:** {topic}\n\n"
-        f"**Time options:**\n{slot_lines}\n\n"
-        f"**RSVP deadline:** {deadline.strftime('%Y-%m-%d %H:%M UTC')}\n\n"
-        f"Reply to this thread with your availability. (Meeting ID: {meeting.id})"
-    )
-    internal_send_stream_message(owner, stream, topic, content, acting_user=owner)
+    # slot_lines = "\n".join(
+    #     f"- {slot.start_time.strftime('%Y-%m-%d %H:%M UTC')}"
+    #     + (f" – {slot.end_time.strftime('%H:%M UTC')}" if slot.end_time else "")
+    #     for slot in meeting.slots.all()
+    # )
+    # content = (
+    #     f"**Meeting proposed:** {topic}\n\n"
+    #     f"**Time options:**\n{slot_lines}\n\n"
+    #     f"**RSVP deadline:** {deadline.strftime('%Y-%m-%d %H:%M UTC')}\n\n"
+    #     f"Reply to this thread with your availability. (Meeting ID: {meeting.id})"
+    # )
+    # internal_send_stream_message(owner, stream, topic, content, acting_user=owner)
 
     return meeting
 
@@ -228,9 +235,12 @@ def get_ranked_slots(meeting: Meeting) -> list[dict[str, object]]:
     return [
         {
             "slot_id": slot.id,
-            "start_time": slot.start_time.isoformat(),
-            "end_time": slot.end_time.isoformat() if slot.end_time else None,
+            "start_time": slot.start_time.astimezone().strftime("%Y-%m-%dT%H:%M"),
+            "end_time": slot.end_time.astimezone().strftime("%Y-%m-%dT%H:%M") if slot.end_time else None,
             "available_count": slot.available_count,
+            "available_user_ids": list(
+                slot.responses.filter(available=True).values_list("user_id", flat=True)
+            ),
         }
         for slot in slots
     ]
@@ -284,8 +294,9 @@ def check_meeting_deadlines() -> None:
             f"{i + 1}. {s['start_time']} — {s['available_count']} available"
             for i, s in enumerate(ranked)
         )
+        notification_bot = get_system_bot(settings.NOTIFICATION_BOT, meeting.owner.realm_id)
         internal_send_private_message(
-            meeting.owner,
+            notification_bot,
             meeting.owner,
             f"The RSVP deadline for **{meeting.topic}** (meeting {meeting.id}) has passed.\n\n"
             f"**Ranked availability:**\n{slot_lines}\n\n"

@@ -30,8 +30,11 @@ class Meeting(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def clean(self) -> None:
-        if self.confirmed_slot is not None and self.confirmed_slot.meeting_id != self.id:
-            raise ValidationError("The confirmed slot must belong to this meeting.")
+        if self.confirmed_slot_id is not None and self.pk is not None:
+            if self.confirmed_slot.meeting_id != self.pk:
+                raise ValidationError(
+                    {"confirmed_slot": "The confirmed slot must belong to this meeting."}
+                )
 
     class Meta:
         indexes = [

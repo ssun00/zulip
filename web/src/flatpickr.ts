@@ -188,8 +188,7 @@ export function show_flatpickr(
         });
     }
     flatpickr_instance.open();
-    assert(flatpickr_instance.selectedDateElem !== undefined);
-    flatpickr_instance.selectedDateElem.focus();
+    flatpickr_instance.selectedDateElem?.focus();
 
     return flatpickr_instance;
 }
