@@ -37,7 +37,10 @@ Come find us on the [development community chat](https://zulip.com/development-c
   to get started. We have invested in making Zulip’s code highly
   readable, thoughtfully tested, and easy to modify. Beyond that, we
   have written an extraordinary 185K words of documentation for Zulip
-  contributors.
+  contributors. Feature-specific maintainer documentation is also
+  available, such as the [Meeting Scheduler maintainer's
+  manual](docs/maintainers-manual.md), which covers its
+  architecture, backend models, API endpoints, and testing.
 
 - **Contributing non-code**. [Report an
   issue](https://zulip.readthedocs.io/en/latest/contributing/reporting-bugs.html),
@@ -63,6 +66,11 @@ Come find us on the [development community chat](https://zulip.com/development-c
   Cloud Standard](https://zulip.com/plans/) for hundreds of worthy
   organizations, including [fellow open-source
   projects](https://zulip.com/for/open-source/).
+
+- **Using Zulip features**. Learn how to use specific features with our user
+  guides, including the [Meeting Scheduler user
+  manual](docs/zulip-meeting-scheduler-user-manual.md), which covers proposing
+  meetings, sending RSVP invitations, and collecting participant availability.
 
 - **Participating in [outreach
   programs](https://zulip.readthedocs.io/en/latest/contributing/contributing.html#outreach-programs)**
