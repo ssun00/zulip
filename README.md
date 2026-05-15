@@ -39,7 +39,7 @@ Come find us on the [development community chat](https://zulip.com/development-c
   have written an extraordinary 185K words of documentation for Zulip
   contributors. Feature-specific maintainer documentation is also
   available, such as the [Meeting Scheduler maintainer's
-  manual](docs/zulip-meeting-scheduler-maintainer-manual.md), which covers its
+  manual](docs/maintainers-manual.md), which covers its
   architecture, backend models, API endpoints, and testing.
 
 - **Contributing non-code**. [Report an
