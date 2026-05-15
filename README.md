@@ -64,6 +64,11 @@ Come find us on the [development community chat](https://zulip.com/development-c
   organizations, including [fellow open-source
   projects](https://zulip.com/for/open-source/).
 
+- **Using Zulip features**. Learn how to use specific features with our user
+  guides, including the [Meeting Scheduler user
+  manual](docs/user-manual.md), which covers proposing
+  meetings, sending RSVP invitations, and collecting participant availability.
+
 - **Participating in [outreach
   programs](https://zulip.readthedocs.io/en/latest/contributing/contributing.html#outreach-programs)**
   like [Google Summer of Code](https://developers.google.com/open-source/gsoc/).
