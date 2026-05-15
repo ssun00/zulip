@@ -40,7 +40,10 @@ Come find us on the [development community chat](https://zulip.com/development-c
   contributors. Feature-specific maintainer documentation is also
   available, such as the [Meeting Scheduler maintainer's
   manual](docs/maintainers-manual.md), which covers its
-  architecture, backend models, API endpoints, and testing.
+  architecture, backend models, API endpoints, and testing. For an
+  overview of the development process and engineering decisions, see the
+  [software engineering practices
+  document](docs/software-engineering-practices.md).
 
 - **Contributing non-code**. [Report an
   issue](https://zulip.readthedocs.io/en/latest/contributing/reporting-bugs.html),
